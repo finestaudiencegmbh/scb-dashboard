@@ -287,6 +287,21 @@ body {
 .chart-wrap { position: relative; }
 .chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
 .chart-grid { stroke: rgba(var(--accent-rgb), 0.1); stroke-width: 1; }
+
+/* ---- Heatmap "Wann Leads reinkommen" ---- */
+.heat-peak { color: var(--muted); font-size: 13.5px; }
+.heat-peak strong { color: var(--accent-ink); font-weight: 600; }
+.heat-scroll { overflow-x: auto; padding: 6px 4px 4px; margin: 0 -4px; contain: inline-size; } /* Raster scrollt in sich, statt die Seite zu verbreitern */
+.heat-grid { display: grid; grid-template-columns: 34px repeat(24, minmax(16px, 1fr)); gap: 5px; min-width: 560px; align-items: center; }
+.heat-hour { color: var(--faint); font-size: 12px; text-align: left; padding-bottom: 2px; }
+.heat-day { color: var(--muted); font-size: 13px; }
+.heat-cell { display: block; aspect-ratio: 1 / 1.05; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.04); transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.heat-cell:hover { transform: scale(1.12); box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.5); }
+.heat-cell.hot { box-shadow: 0 0 16px rgba(var(--accent-rgb), var(--heat)), 0 0 4px rgba(var(--accent-rgb), var(--heat)); border-color: rgba(var(--accent-rgb), 0.45); }
+.heat-legend { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 14px; color: var(--faint); font-size: 12px; }
+.heat-cell.legend { width: 14px; height: 14px; aspect-ratio: auto; border-radius: 4px; }
+.heat-legend span:first-child { margin-right: 4px; }
+.heat-legend span:last-child { margin-left: 4px; }
 .chart-axis { fill: var(--faint); font-size: 11px; }
 .chart-hover-line { stroke: rgba(var(--accent-rgb), 0.5); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart-empty { color: var(--muted); padding: 40px; text-align: center; font-size: 14px; }
@@ -519,6 +534,8 @@ body {
 @media (max-width: 820px) {
   body { font-size: 16px; }
   .content { padding: 0 14px calc(82px + env(safe-area-inset-bottom)); }
+  /* .content .topbar (Desktop, -28px) würde sonst die mobile Topbar 14px über den Rand schieben */
+  .content .topbar { margin-left: -14px; margin-right: -14px; padding-left: 14px; padding-right: 14px; }
 
   /* ---- Sidebar -> untere Tab-Leiste ---- */
   .layout { flex-direction: column; }

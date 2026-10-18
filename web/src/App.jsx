@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchData } from './api.js';
-import { applyFilters, aggregate, computeKpis, tierDistribution, leadsByDay, leadsByTime, cplByDay, qualityByDay, qualifiedTiersOf, DIMENSIONS, fmtDate } from './lib.js';
+import { applyFilters, aggregate, computeKpis, tierDistribution, leadsByDay, leadsByTime, cplByDay, qualityByDay, qualifiedTiersOf, fmtDate } from './lib.js';
 import Kpis from './components/Kpis.jsx';
 import Filters from './components/Filters.jsx';
 import BreakdownTable from './components/BreakdownTable.jsx';
@@ -11,6 +11,7 @@ import CampaignCards from './components/CampaignCards.jsx';
 import DateRangePicker from './components/DateRangePicker.jsx';
 import SourcesView from './components/SourcesView.jsx';
 import ChatBot from './components/ChatBot.jsx';
+import LeadHeatmap from './components/LeadHeatmap.jsx';
 import { useProject } from './project.jsx';
 import { fmtEur, fmtInt } from './lib.js';
 
@@ -37,7 +38,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [range, setRange] = useState({ from: '', to: '' });
-  const [tab, setTab] = useState('campaign');
   const [view, setView] = useState('dashboard');
 
   const load = async (refresh = false, r = range) => {
@@ -75,31 +75,7 @@ export default function App() {
   const cplDaily = useMemo(() => ((hasFb && fb.daily) ? cplByDay(fb.daily.spend, filtered) : []), [hasFb, fb, filtered]);
   const qualityDaily = useMemo(() => (data ? qualityByDay(filtered) : []), [data, filtered]);
 
-  // Drill-Pfad NUR für "Performance nach Ebene" – getrennt von den globalen
-  // Filtern. Klick = reinzoomen, ohne dauerhaften globalen Filter zu setzen.
-  const [drill, setDrill] = useState({ campaign: '', adset: '', creative: '' });
   const [orgDrill, setOrgDrill] = useState(''); // organische Kampagne, in die reingezoomt wurde
-
-  // Leads zusätzlich nach dem Drill-Pfad einschränken (lokal, nicht global)
-  const drillLeads = useMemo(() => {
-    if (!data) return [];
-    const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-    return filtered.filter((l) =>
-      (!drill.campaign || norm(l.campaign) === norm(drill.campaign)) &&
-      (!drill.adset || norm(l.adset) === norm(drill.adset)) &&
-      (!drill.creative || norm(l.creative) === norm(drill.creative))
-    );
-  }, [data, filtered, drill]);
-
-  const UNATTRIB = '(Paid · nicht zuordenbar)';
-
-  // Zwei getrennte Container: bezahlt (Meta) und organisch. Nicht zuordenbare
-  // Paid-Leads werden ausgeblendet (verwirren in der Aufschlüsselung).
-  const paidRows = useMemo(() => {
-    if (!data) return [];
-    const leads = drillLeads.filter((l) => l.sourceType === 'paid' && l.campaign !== UNATTRIB);
-    return aggregate(leads, tab, data.overviewByAdset, fb, drill, { features, qualifiedTiers });
-  }, [data, drillLeads, tab, fb, drill, features, qualifiedTiers]);
 
   const organicRows = useMemo(() => {
     if (!data) return [];
@@ -116,15 +92,6 @@ export default function App() {
     );
     return rows;
   }, [data, filtered, fb, orgDrill, features, qualifiedTiers]);
-
-  // Drill-Down: Klick auf eine Zeile zoomt eine Ebene tiefer (lokaler Pfad).
-  const DRILL_ORDER = ['campaign', 'adset', 'creative', 'placement'];
-  const selectDim = (key) => {
-    if (tab === 'placement') return; // unterste Ebene, kein weiteres Reinzoomen
-    setDrill((d) => ({ ...d, [tab]: key }));
-    const idx = DRILL_ORDER.indexOf(tab);
-    if (idx >= 0 && idx < DRILL_ORDER.length - 1) setTab(DRILL_ORDER[idx + 1]);
-  };
 
   if (loading && !data) return <div className="loader">Lade Daten…</div>;
 
@@ -238,33 +205,7 @@ export default function App() {
                 {/* KPI-Boxen darunter */}
                 <Kpis kpis={kpis} dist={dist} tiers={tiers} qualifiedTiers={qualifiedTiers} qualityDaily={qualityDaily} />
 
-                <section className="panel">
-                  <div className="panel-head"><div><h2>Bezahlt · Meta</h2><span className="panel-sub">Performance nach Kampagne, Anzeigengruppe, Creative und Placement</span></div></div>
-                  <div className="tabs-row">
-                    <div className="tabs">
-                      {DIMENSIONS.map((d) => (
-                        <button key={d.key} className={`tab ${tab === d.key ? 'active' : ''}`} onClick={() => setTab(d.key)}>{d.label}</button>
-                      ))}
-                    </div>
-                    <span className="tabs-hint">Zeile anklicken = eine Ebene tiefer</span>
-                  </div>
-                  {DIMENSIONS.some((d) => drill[d.key]) && (
-                    <div className="drill-crumbs">
-                      <span className="crumb-label">Aufgeschlüsselt nach:</span>
-                      {DIMENSIONS.filter((d) => drill[d.key]).map((d) => (
-                        <span key={d.key} className="crumb">
-                          <span className="crumb-dim">{d.label}:</span> {drill[d.key].length > 38 ? drill[d.key].slice(0, 35) + '…' : drill[d.key]}
-                          <button className="crumb-x" title="Diese Ebene verlassen" onClick={() => { setDrill((dd) => ({ ...dd, [d.key]: '' })); setTab(d.key); }}>×</button>
-                        </span>
-                      ))}
-                      <button className="crumb-clear" onClick={() => { setDrill({ campaign: '', adset: '', creative: '' }); setTab('campaign'); }}>zurücksetzen</button>
-                    </div>
-                  )}
-                  {!hasFb && (tab === 'creative' || tab === 'placement') && (
-                    <div className="info-note">Adspend ist je Anzeigengruppe im Sheet hinterlegt – auf Creative-/Placement-Ebene über die Facebook-Anbindung.</div>
-                  )}
-                  <BreakdownTable rows={paidRows} dimLabel={DIMENSIONS.find((d) => d.key === tab).label} onSelect={selectDim} tiers={tiers} />
-                </section>
+                <LeadHeatmap leads={filtered} />
 
                 {organicRows.length > 0 && (
                   <section className="panel">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { fmtEur, fmtEur2, fmtInt, fmtPct, fmtQuality } from '../lib.js';
 import { useProject } from '../project.jsx';
+import { GlowDefs, useChartIds } from './ChartGlow.jsx';
 
 /**
  * "Grafik"-Panel: Zeitreihe je Entität (Kampagne/Anzeigengruppe/Creative) mit
@@ -179,6 +180,7 @@ export default function GraphPanel({ title, levelLabel, series, hourly = false, 
 /** SVG-Chart mit pro Serie eigener Skala (Normalisierung auf eigenes Max). */
 function OverlayChart({ series, hourly = false }) {
   const [hover, setHover] = useState(null);
+  const ids = useChartIds();
   const fmtX = hourly ? fmtHourLabel : fmtDay;
 
   const model = useMemo(() => {
@@ -226,6 +228,18 @@ function OverlayChart({ series, hourly = false }) {
     });
     return d.trim();
   };
+  // Fläche unter jedem zusammenhängenden Abschnitt (Lücken bleiben leer)
+  const areaFor = (pts) => {
+    const base = pad.t + plotH;
+    const runs = [];
+    let run = [];
+    pts.forEach((p) => { if (p) run.push(p); else { if (run.length) runs.push(run); run = []; } });
+    if (run.length) runs.push(run);
+    return runs
+      .filter((r) => r.length > 1)
+      .map((r) => `M${r[0].x},${base} ${r.map((p) => `L${p.x},${p.y}`).join(' ')} L${r[r.length - 1].x},${base} Z`)
+      .join(' ');
+  };
 
   return (
     <div className="graph-chart">
@@ -243,16 +257,20 @@ function OverlayChart({ series, hourly = false }) {
           onTouchStart={(e) => e.touches[0] && pick(e.touches[0].clientX, e.currentTarget)}
           onTouchMove={(e) => e.touches[0] && pick(e.touches[0].clientX, e.currentTarget)}
           style={{ touchAction: 'pan-y' }}>
+          <GlowDefs ids={ids} w={w} h={h} colors={prepared.slice(0, 1).map((s) => s.color)} />
           {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
             const yy = pad.t + plotH - f * plotH;
             return <line key={i} x1={pad.l} y1={yy} x2={w - pad.r} y2={yy} className="chart-grid" />;
           })}
+          {/* Verlauf nur unter der ersten Kennzahl – bei mehreren überlagerten
+              Flächen wäre nichts mehr lesbar */}
+          {prepared[0] && areaFor(prepared[0].pts) && <path d={areaFor(prepared[0].pts)} fill={`url(#${ids.area(0)})`} />}
           {prepared.map((s) => (
-            <path key={s.key} d={pathFor(s.pts)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+            <path key={s.key} d={pathFor(s.pts)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" filter={`url(#${ids.glow})`} />
           ))}
           {hover != null && <line x1={x(hover)} y1={pad.t} x2={x(hover)} y2={pad.t + plotH} className="chart-hover-line" />}
           {hover != null && prepared.map((s) => s.pts[hover] && (
-            <circle key={s.key} cx={s.pts[hover].x} cy={s.pts[hover].y} r="4" fill={s.color} stroke="#0b0b14" strokeWidth="1.5" />
+            <circle key={s.key} cx={s.pts[hover].x} cy={s.pts[hover].y} r="4" fill={s.color} stroke="#0b0b14" strokeWidth="1.5" filter={`url(#${ids.glow})`} />
           ))}
           {Array.from({ length: 5 }, (_, k) => Math.round((k * (dates.length - 1)) / 4)).filter((v, i, a) => a.indexOf(v) === i).map((i) => (
             <text key={i} x={x(i)} y={h - 8} className="chart-axis" textAnchor="middle">{fmtX(dates[i])}</text>

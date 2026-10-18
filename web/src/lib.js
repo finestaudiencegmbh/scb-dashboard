@@ -373,6 +373,23 @@ export function leadsByTime(leads, hourlyDay = null) {
   return finalizeMinuteBuckets(buckets);
 }
 
+/**
+ * Leads je Wochentag (0 = Montag) und Stunde für die Heatmap "Wann Leads
+ * reinkommen". Gezählt werden nur Zeilen aus dem Lead-Tab. Die Sheet-Zeit ist
+ * bereits deutsche Ortszeit und wird als UTC gelesen (siehe parser.js), daher
+ * hier getUTCDay/getUTCHours statt der Browser-Zeitzone.
+ */
+export function leadsByWeekdayHour(leads) {
+  const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (const l of leads) {
+    if (l.isLead === false || !l.wonAt) continue;
+    const d = new Date(l.wonAt);
+    if (Number.isNaN(d.getTime())) continue;
+    grid[(d.getUTCDay() + 6) % 7][d.getUTCHours()] += 1;
+  }
+  return grid;
+}
+
 /** Baut minutengenaue Buckets aus serverseitigen Events [{ m, ticket, quality }]
  * (für das Grafik-Panel je Entität). */
 export function minuteSeriesFromEvents(events, day) {

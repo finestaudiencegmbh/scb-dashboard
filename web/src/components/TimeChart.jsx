@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { GlowDefs, useChartIds } from './ChartGlow.jsx';
 
 /**
  * Leichtgewichtiger SVG-Zeitreihen-Graph (keine Library).
@@ -7,6 +8,7 @@ import React, { useState, useMemo } from 'react';
  */
 export default function TimeChart({ title, series, formatY = (v) => v, formatX = fmtDay, height = 220 }) {
   const [hover, setHover] = useState(null);
+  const ids = useChartIds();
 
   const { dates, points, maxY, pad, w, h, plotW, plotH } = useMemo(() => {
     const dateSet = new Set();
@@ -67,6 +69,7 @@ export default function TimeChart({ title, series, formatY = (v) => v, formatX =
       </div>
       <div className="chart-wrap">
         <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="chart-svg" onMouseMove={onMove} onMouseLeave={() => setHover(null)} onTouchStart={onTouch} onTouchMove={onTouch} style={{ touchAction: 'pan-y' }}>
+          <GlowDefs ids={ids} w={w} h={h} colors={series.map((s) => s.color)} />
           {/* horizontale Gitterlinien + Y-Beschriftung */}
           {Array.from({ length: yTicks + 1 }).map((_, i) => {
             const val = (maxY / yTicks) * i;
@@ -85,9 +88,9 @@ export default function TimeChart({ title, series, formatY = (v) => v, formatX =
             const area = `${line} L${pts[pts.length - 1].x},${pad.t + plotH} L${pts[0].x},${pad.t + plotH} Z`;
             return (
               <g key={s.key}>
-                <path d={area} fill={s.color} opacity="0.12" />
-                <path d={line} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                {hover != null && <circle cx={pts[hover].x} cy={pts[hover].y} r="4" fill={s.color} stroke="#0b0b14" strokeWidth="1.5" />}
+                <path d={area} fill={`url(#${ids.area(si)})`} />
+                <path d={line} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" filter={`url(#${ids.glow})`} />
+                {hover != null && <circle cx={pts[hover].x} cy={pts[hover].y} r="4" fill={s.color} stroke="#0b0b14" strokeWidth="1.5" filter={`url(#${ids.glow})`} />}
               </g>
             );
           })}
