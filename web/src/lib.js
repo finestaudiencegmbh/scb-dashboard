@@ -374,8 +374,8 @@ export function leadsByTime(leads, hourlyDay = null) {
 }
 
 /**
- * Leads je Wochentag (0 = Montag) und Stunde für die Heatmap "Wann Leads
- * reinkommen". Gezählt werden nur Zeilen aus dem Lead-Tab. Die Sheet-Zeit ist
+ * Leads je Wochentag (0 = Montag) und Stunde für die Heatmap "Leadaktivitäten"
+ * Gezählt werden nur Zeilen aus dem Lead-Tab. Die Sheet-Zeit ist
  * bereits deutsche Ortszeit und wird als UTC gelesen (siehe parser.js), daher
  * hier getUTCDay/getUTCHours statt der Browser-Zeitzone.
  */

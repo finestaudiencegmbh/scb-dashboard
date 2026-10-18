@@ -98,6 +98,7 @@ export function publicProjectConfig(cfg = loadProjectConfig()) {
     name: cfg.name,
     shortName: cfg.shortName,
     subtitle: cfg.subtitle,
+    event: cfg.event || '',
     slug: cfg.slug,
     branding: cfg.branding,
     features: cfg.features,

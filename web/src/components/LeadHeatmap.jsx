@@ -6,7 +6,7 @@ const DAYS_LONG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'S
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /**
- * Heatmap "Wann Leads reinkommen": Wochentag x Stunde. Die Intensität kommt
+ * Heatmap "Leadaktivitäten": Wochentag x Stunde. Die Intensität kommt
  * aus der Akzentfarbe (--accent-rgb), starke Zellen leuchten – funktioniert
  * damit in jedem Branding. Reagiert auf die aktiven Filter.
  */
@@ -25,7 +25,7 @@ export default function LeadHeatmap({ leads }) {
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h2>Wann Leads reinkommen</h2>
+          <h2>Leadaktivitäten</h2>
           <span className="panel-sub">Eintragungen nach Wochentag und Uhrzeit (deutsche Zeit)</span>
         </div>
         {peak && (

@@ -25,7 +25,8 @@ Das ist die einzige Datei, die jedes Projekt anfassen muss.
 |---|---|
 | `name` | Voller Projektname. Steht in der Topbar, im Browser-Titel, im Basic-Auth-Dialog und im System-Prompt des Chatbots. |
 | `shortName` | Kurzform für die Sidebar. |
-| `subtitle` | Zeile unter dem Namen, z. B. `"Workshop · 15.–18.06."`. |
+| `subtitle` | Zeile unter dem Namen in der Sidebar, z. B. die Dachmarke `"Tracking Dashboard J&P"`. Steht auch im Browser-Titel. |
+| `event` | Optional: dritte, kleinere Zeile für das konkrete Event, z. B. `"Live-Webinar · 01.11."`. Leer = ausgeblendet. |
 | `slug` | Kleinschreibung, ohne Leerzeichen. Wird für den CSV-Dateinamen benutzt. |
 | `branding.accent` | Akzentfarbe als Hex. Hover-, Glow- und Linien-Töne leitet das Frontend automatisch ab. |
 | `branding.logo` | Pfad zu einer Datei in `web/public/`, z. B. `/logo.svg`. |

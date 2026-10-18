@@ -103,6 +103,7 @@ export default function App() {
           <div className="brand-text">
             <div className="brand-title">{project.shortName || project.name}</div>
             <div className="brand-sub">{project.subtitle}</div>
+            {project.event && <div className="brand-event">{project.event}</div>}
           </div>
         </div>
         <nav className="nav">
