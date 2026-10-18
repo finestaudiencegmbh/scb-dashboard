@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fmtEur, fmtInt, fmtPct, fmtQuality, entityKey, minuteSeriesFromEvents } from '../lib.js';
 import { useProject } from '../project.jsx';
 import GraphPanel from './GraphPanel.jsx';
@@ -81,8 +81,50 @@ function StatusDot({ active }) {
 
 const LEVEL_LABEL = { campaign: 'Kampagne', adset: 'Anzeigengruppe', creative: 'Creative' };
 
+const campKey = (c) => String(c.id ?? c.name);
+
+/** Griff zum Verschieben (sechs Punkte). */
+function DragHandle({ onPointerDown }) {
+  return (
+    <span className="cc-drag" onPointerDown={onPointerDown} onClick={(e) => e.stopPropagation()} title="Ziehen, um die Reihenfolge zu ändern" aria-label="Kampagne verschieben" role="button">
+      <svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true">
+        {[3, 8, 13].map((y) => [3, 9].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.6" fill="currentColor" />))}
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * Eigene Reihenfolge der Kampagnen, im Browser gespeichert (je Projekt).
+ * Kampagnen ohne gespeicherten Platz (neu hinzugekommen) folgen darunter in
+ * der Standard-Sortierung nach Spend.
+ */
+function useCampaignOrder(slug) {
+  const storageKey = `campaignOrder:${slug || 'dashboard'}`;
+  const [order, setOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; }
+  });
+  useEffect(() => {
+    try {
+      if (order.length) localStorage.setItem(storageKey, JSON.stringify(order));
+      else localStorage.removeItem(storageKey);
+    } catch { /* privater Modus o. ä.: Reihenfolge gilt dann nur bis zum Neuladen */ }
+  }, [order, storageKey]);
+  const sort = (list) => {
+    const rank = new Map(order.map((k, i) => [k, i]));
+    return [...list].sort((a, b) => {
+      const ra = rank.get(campKey(a)), rb = rank.get(campKey(b));
+      if (ra != null && rb != null) return ra - rb;
+      if (ra != null) return -1;
+      if (rb != null) return 1;
+      return 0; // Array.sort ist stabil -> Spend-Reihenfolge bleibt
+    });
+  };
+  return { order, setOrder, sort };
+}
+
 export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEntity, intradayDay, accounts }) {
-  const { features, labels } = useProject();
+  const { features, labels, slug } = useProject();
   const { hasTickets, hasQuality } = features;
   const T = labels.ticket;
   // Spalten der Anzeigen-Tabelle: Name + je nach Feature 5–7 Kennzahlen
@@ -120,7 +162,39 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
   };
   const hasGraph = (dim, parts) => hasData(dim, parts);
 
-  const campaigns = (hierarchy || []).filter((c) => !onlyActive || c.active !== false);
+  const { order, setOrder, sort } = useCampaignOrder(slug);
+  const allSorted = sort(hierarchy || []);
+  const campaigns = allSorted.filter((c) => !onlyActive || c.active !== false);
+
+  // Verschieben per Ziehen am Griff (Pointer-Events: Maus und Touch). Während
+  // des Ziehens wird die Reihenfolge live umgestellt; ausgeblendete Kampagnen
+  // ("Nur aktive") behalten ihren Platz in der gespeicherten Liste.
+  const [dragId, setDragId] = useState(null);
+  const allKeysRef = useRef([]);
+  allKeysRef.current = allSorted.map(campKey);
+  const onDragStart = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setDragId(key);
+  };
+  const onDragMove = (e) => {
+    if (!dragId) return;
+    const edge = 70;
+    if (e.clientY < edge) window.scrollBy(0, -14);
+    else if (e.clientY > window.innerHeight - edge) window.scrollBy(0, 14);
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-cid]');
+    const overKey = target?.getAttribute('data-cid');
+    if (!overKey || overKey === dragId) return;
+    const rect = target.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    const keys = allKeysRef.current.filter((k) => k !== dragId);
+    const at = keys.indexOf(overKey);
+    if (at < 0) return;
+    keys.splice(before ? at : at + 1, 0, dragId);
+    if (keys.join('\n') !== allKeysRef.current.join('\n')) setOrder(keys);
+  };
+  const onDragEnd = () => setDragId(null);
 
   // Eine einzelne Kampagnen-Karte rendern (für flache Liste ODER Account-Gruppen)
   const renderCampaign = (c) => {
@@ -128,8 +202,9 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
           const leadHidden = c.leadCampaign === false;
           const adsets = c.adsets.filter((a) => !onlyActive || a.active !== false);
           return (
-            <div key={c.id} className={`cc-card ${leadHidden ? 'is-traffic' : ''}`}>
+            <div key={c.id} data-cid={campKey(c)} className={`cc-card ${leadHidden ? 'is-traffic' : ''} ${dragId === campKey(c) ? 'is-dragging' : ''}`}>
               <div className="cc-head" onClick={() => toggle(c.id)} role="button">
+                <DragHandle onPointerDown={(e) => onDragStart(e, campKey(c))} />
                 <span className={`caret ${cOpen ? 'open' : ''}`}>▶</span>
                 <StatusDot active={c.active} />
                 <span className="cc-name" title={c.name}>{c.name}</span>
@@ -217,14 +292,17 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
   }
 
   return (
-    <div>
+    <div className={dragId ? 'cc-sorting' : ''} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}>
       <div className="table-toolbar">
         <label className="switch">
           <input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />
           <span className="switch-track"><span className="switch-thumb" /></span>
           <span className="switch-label">Nur aktive anzeigen</span>
         </label>
-        <span className="muted">{campaigns.length} Kampagnen{accountList ? ` · ${accountList.length} Konten` : ''}</span>
+        <span className="cc-toolbar-right">
+          {order.length > 0 && <button className="ghost-btn cc-order-reset" onClick={() => setOrder([])}>Reihenfolge zurücksetzen</button>}
+          <span className="muted">{campaigns.length} Kampagnen{accountList ? ` · ${accountList.length} Konten` : ''}</span>
+        </span>
       </div>
 
       {body}
