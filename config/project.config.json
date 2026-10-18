@@ -4,7 +4,7 @@
   "shortName": "Secret Creators",
   "subtitle": "Live-Webinar · 01.11.",
   "slug": "secret-creators",
-  "_comment_branding": "accent = Akzentfarbe (Hex), daraus werden Hover-, Glow- und Linien-Töne abgeleitet. gradient = optionale Farbstopps für Buttons, aktive Tabs und Navigation (sonst hell -> Akzent -> dunkel aus accent). background = Grundton des Dashboards, Panels/Sidebar/Topbar leiten sich davon ab. Die Textfarbe auf Akzentflächen (hell/dunkel) wird automatisch gewählt. logo = Pfad im Ordner web/public. Secret Creators: Juicy #D51B35 als Akzent, Verlauf Feminine #FF5656 -> Juicy -> Bold #551528, Premium-Schwarz als Hintergrund. Logo = Brandmark in der freigegebenen Farbvariante auf Joyful.",
+  "_comment_branding": "accent = Akzentfarbe (Hex), daraus werden Hover-, Glow- und Linien-Töne abgeleitet. gradient = optionale Farbstopps für Buttons, aktive Tabs und Navigation (sonst hell -> Akzent -> dunkel aus accent). background = Grundton des Dashboards, Panels/Sidebar/Topbar leiten sich davon ab. Die Textfarbe auf Akzentflächen (hell/dunkel) wird automatisch gewählt. logo = Pfad im Ordner web/public. Secret Creators: Juicy #D51B35 als Akzent, Verlauf Feminine #FF5656 -> Juicy -> Bold #551528, Premium-Schwarz als Hintergrund. Logo = goldenes S-Signet (transparent, 256 px).",
   "branding": {
     "accent": "#d51b35",
     "gradient": ["#ff5656", "#d51b35", "#551528"],
