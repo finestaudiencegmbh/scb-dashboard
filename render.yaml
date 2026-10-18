@@ -1,0 +1,56 @@
+# Render.com Blueprint – Ein-Klick-Deployment des Dashboards.
+# Anleitung in TEMPLATE.md. Secrets (Service-Account, Login, Tokens) werden
+# NICHT hier gespeichert, sondern beim Deploy abgefragt (sync: false).
+# Pro Projekt anzupassen: name (Service-/URL-Name) – siehe Warnung unten.
+
+services:
+  - type: web
+    # WICHTIG: Render ordnet Services über diesen Namen zu. Wird er geändert,
+    # legt der nächste Blueprint-Sync einen NEUEN Service an (neue URL, leere
+    # Env-Vars) und der bestehende fällt aus dem Blueprint. Für ein neues
+    # Projekt daher entweder von Anfang an setzen oder den Umzug bewusst machen.
+    name: mmv-fuatmarta-dashboard
+    runtime: node
+    plan: free
+    # devDependencies (vite) werden für den Build gebraucht -> explizit mitinstallieren
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      # --- Google Sheet (ID aus der Sheet-URL) ---
+      - key: SPREADSHEET_ID
+        value: 1a0L9E798ChgwWh7X0xZFoRnHi53RAIeqkno3-_Z25M0
+      - key: CACHE_TTL_SECONDS
+        value: "900"
+      # --- KI-Chatbot (optional) – Anthropic-API-Key ---
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # --- Login (teilbare URL + Passwort) – beim Deploy ausfüllen ---
+      - key: DASHBOARD_USER
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      # --- Google-Service-Account als kompletter JSON-Key (eine Zeile) ---
+      # Leer lassen = Demo-Modus. Sobald gesetzt -> echte Sheet-Daten live.
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      # --- Facebook-Ads direkt via Meta Marketing API – optional, leer = aus ---
+      # Hat Vorrang vor Supermetrics, wenn gesetzt.
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: META_AD_ACCOUNT_ID
+        value: act_305949210219349
+      # --- Facebook-Ads via Supermetrics – optional, leer = aus ---
+      - key: SUPERMETRICS_API_KEY
+        sync: false
+      - key: SUPERMETRICS_DS_ACCOUNTS
+        sync: false
+      - key: SUPERMETRICS_DS_USER
+        sync: false
+      - key: SUPERMETRICS_QUERY_JSON
+        sync: false

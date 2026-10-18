@@ -1,0 +1,32 @@
+{
+  "name": "workshop-lead-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Wiederverwendbares Lead- & Kampagnen-Dashboard für Workshops/Funnels. Liest live aus einem Google Tracking Sheet und der Meta Marketing API und wertet Leads nach Kampagne, Anzeigengruppe, Creative und Placement aus. Projektspezifisches steht in config/project.config.json – siehe TEMPLATE.md.",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "serve": "npm run build && npm run start",
+    "test": "node server/parser.test.mjs && node server/supermetrics.test.mjs && node server/meta.test.mjs && node server/combine.test.mjs && node server/features.test.mjs && node server/project.test.mjs && node server/attribution.test.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.11"
+  }
+}

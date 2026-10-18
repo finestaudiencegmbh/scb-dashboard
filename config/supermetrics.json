@@ -1,0 +1,40 @@
+{
+  "_comment": "Konfiguration der Supermetrics-Abfrage für Facebook Ads. API-Key + Account kommen aus der .env (SUPERMETRICS_*). Wenn du im Supermetrics-Query-Builder eine fertige Abfrage hast, kannst du das komplette JSON als SUPERMETRICS_QUERY_JSON in die .env legen – das hat dann Vorrang vor 'query' hier.",
+
+  "enabled": true,
+  "endpoint": "https://api.supermetrics.com/enterprise/v2/query/data/json",
+  "lookbackDays": 90,
+  "maxRows": 100000,
+
+  "query": {
+    "ds_id": "FA",
+    "ds_accounts": [],
+    "ds_user": "",
+    "fields": [
+      "Campaign_name",
+      "Adset_name",
+      "Ad_name",
+      "publisher_platform",
+      "placement",
+      "cost",
+      "impressions",
+      "clicks",
+      "reach",
+      "date"
+    ]
+  },
+
+  "_comment_roles": "Ordnet die zurückgegebenen Spalten (per Anzeigename, Teilstring, case-insensitiv) den Rollen zu, die das Dashboard braucht. Robust gegenüber abweichenden Feld-IDs.",
+  "columnRoles": {
+    "campaign": ["campaign name", "campaign"],
+    "adset": ["ad set name", "adset name", "ad set", "adset"],
+    "creative": ["ad name", "ad"],
+    "placement": ["placement", "platform position", "position"],
+    "platform": ["publisher platform", "platform"],
+    "date": ["date"],
+    "spend": ["cost", "spend", "amount spent"],
+    "impressions": ["impressions"],
+    "clicks": ["clicks", "link clicks"],
+    "reach": ["reach"]
+  }
+}

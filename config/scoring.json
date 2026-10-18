@@ -1,0 +1,92 @@
+{
+  "_comment": "Bewertungsmodell für die Lead-Qualität des Result-Maker-Workshops. Bewertet werden die Antworten aus dem Tab 'Online-Workshop … Umfrage'. Geändert wird hier – nicht im Code. Nach dem Speichern im Dashboard auf 'Aktualisieren' klicken.",
+
+  "_comment_logik": "Die Einstufung folgt festen Geschäftsregeln, nicht einer Punkte-Mischung. Reihenfolge der Prüfung: (1) Disqualifikation über die Berufsbezeichnung (Rentner/Schüler/Arbeitssuchend) -> D. Das Alter disqualifiziert NICHT. (2) Mittelfeld 2.000–2.999 € MIT Kaufsignal (hohe Dringlichkeit ODER selbstständig) -> B. (3) sonst entscheidet das Einkommen: über 3.000 € -> A, 2.000–2.999 € -> C, darunter -> D. Umgesetzt über die Einkommensstufen (income = einziges Gewicht) plus die harten Regeln unter 'rules'. Dringlichkeit und Berufsbezeichnung fließen mit Gewicht 0 nicht in den gerechneten Score ein, wirken aber über die Regeln – so bleibt die Einstufung nachvollziehbar statt vermischt.",
+
+  "_comment_skala": "Die Punktwerte sind eine SCHULNOTEN-SKALA: D = 0, C = 40, B = 70, A = 100. Das Dashboard zeigt als Lead-Qualität den Durchschnitt dieser Punkte in Prozent. Ein A und ein B ergeben also 85 %, nicht 50 %. Wer die Stufen verschiebt, verschiebt damit auch die angezeigte Qualität – die Werte müssen zu den 'tiers' unten passen (A ab 75, B ab 55, C ab 35).",
+
+  "weights": {
+    "income": 1.0,
+    "urgency": 0,
+    "employment": 0
+  },
+
+  "_comment_rules": "Harte Geschäftsregeln, der Reihe nach geprüft; die erste passende gewinnt und schlägt den gerechneten Score. 'any' = eine Bedingung reicht, 'all' = alle müssen passen. match/matchAny wird case-insensitiv als Teilstring gegen die Antwort geprüft. setScore erzwingt, minScore/maxScore heben bzw. deckeln.",
+  "rules": [
+    {
+      "_comment": "Disqualifikation über die Berufsbezeichnung, NICHT über das Alter. Wer mit 62 angestellt ist und über 5.000 € verdient, ist ein guter Lead. Wer nicht mehr arbeitet, steckt ohnehin in 'Rentner'.",
+      "label": "Disqualifiziert: kein planbares Einkommen",
+      "any": [
+        { "dim": "employment", "matchAny": ["rentner", "schüler", "student", "arbeitssuchend", "arbeitslos"] }
+      ],
+      "setScore": 0
+    },
+    {
+      "label": "Mittelfeld mit Kaufsignal: hohe Dringlichkeit",
+      "all": [
+        { "dim": "income", "atLeast": 2000, "below": 3000 },
+        { "dim": "urgency", "matchAny": ["sofort", "so schnell wie möglich", "nächsten wochen", "woche"] }
+      ],
+      "setScore": 70
+    },
+    {
+      "label": "Mittelfeld mit Kaufsignal: selbstständig oder Unternehmer",
+      "all": [
+        { "dim": "income", "atLeast": 2000, "below": 3000 },
+        { "dim": "employment", "matchAny": ["selbstständig", "selbststaendig", "selbständig", "unternehmer"] }
+      ],
+      "setScore": 70
+    }
+  ],
+
+  "income": {
+    "_comment": "Netto-Einkommen (Spalte J der Umfrage). Antwortoptionen: 'Unter 1.999 €', '2.000 - 2.999 €', '3.000 - 3.999 €', '4.000 - 4.999 €', 'Über 5.000 €'. Aus der Antwort wird der Mittelwert der Spanne gebildet ('3.000 - 3.999 €' -> 3.500); 'Unter X' und 'Über X' werden erkannt. Die Stufenwerte fallen direkt auf die Noten-Skala: 1.0 -> 100 = A, 0.4 -> 40 = C, 0.0 -> 0 = D.",
+    "tiers": [
+      { "atLeast": 3000, "score": 1.0 },
+      { "atLeast": 2000, "score": 0.4 },
+      { "atLeast": 0, "score": 0.0 }
+    ]
+  },
+
+  "urgency": {
+    "_comment": "Dringlichkeit der Lösung. Aktuell Gewicht 0 – wird berechnet und im Lead-Detail angezeigt, entscheidet aber nicht über die Note. Regeln werden von oben nach unten als Teilstring geprüft (case-insensitiv), die erste passende gewinnt.",
+    "rules": [
+      { "match": "sofort", "score": 1.0 },
+      { "match": "so schnell wie möglich", "score": 1.0 },
+      { "match": "nächsten wochen", "score": 0.9 },
+      { "match": "woche", "score": 0.85 },
+      { "match": "nächsten monaten", "score": 0.55 },
+      { "match": "monat", "score": 0.5 },
+      { "match": "jahr", "score": 0.25 },
+      { "match": "irgendwann", "score": 0.1 },
+      { "match": "keine", "score": 0.1 },
+      { "match": "nur informieren", "score": 0.1 }
+    ],
+    "default": 0.4
+  },
+
+  "employment": {
+    "_comment": "Berufsbezeichnung. Antwortoptionen: 'Angestellt', 'Selbstständig / Unternehmer', 'Rentner', 'Schüler/Student', 'Arbeitssuchend'. Aktuell Gewicht 0 – die drei letzten Optionen wirken stattdessen als Disqualifikation über 'rules'. Das Alter fließt bewusst NICHT in die Bewertung ein, es wird nur angezeigt und ist filterbar. Schlüssel werden case-insensitiv als Teilstring geprüft, der erste Treffer gewinnt.",
+    "scores": {
+      "unternehmer": 1.0,
+      "selbstständig": 0.9,
+      "selbststaendig": 0.9,
+      "selbständig": 0.9,
+      "angestellt": 0.7,
+      "rentner": 0.2,
+      "schüler": 0.15,
+      "student": 0.15,
+      "arbeitssuchend": 0.1,
+      "arbeitslos": 0.1
+    },
+    "default": 0.5
+  },
+
+  "_comment_tiers": "qualified: true = zählt in der Kachel 'Qualifizierte Leads' und in der Quali-Rate je Kampagne/Creative. Aktuell nur A, also Einkommen über 3.000 €. B ist weiterhin eine eigene Note für die Anrufreihenfolge, gilt aber nicht als qualifiziert.",
+  "tiers": [
+    { "key": "A", "label": "A · Top", "min": 75, "color": "#16a34a", "qualified": true },
+    { "key": "B", "label": "B · Gut", "min": 55, "color": "#65a30d" },
+    { "key": "C", "label": "C · Mittel", "min": 35, "color": "#d97706" },
+    { "key": "D", "label": "D · Schwach", "min": 0, "color": "#dc2626" }
+  ]
+}

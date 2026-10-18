@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Service-Account-Schlüssel NIEMALS committen
+service-account.json
+credentials/
+*.serviceaccount.json
