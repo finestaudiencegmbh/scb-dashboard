@@ -9,7 +9,7 @@ services:
     # legt der nächste Blueprint-Sync einen NEUEN Service an (neue URL, leere
     # Env-Vars) und der bestehende fällt aus dem Blueprint. Für ein neues
     # Projekt daher entweder von Anfang an setzen oder den Umzug bewusst machen.
-    name: mmv-fuatmarta-dashboard
+    name: secret-creators-dashboard
     runtime: node
     plan: free
     # devDependencies (vite) werden für den Build gebraucht -> explizit mitinstallieren
@@ -24,7 +24,7 @@ services:
         value: "false"
       # --- Google Sheet (ID aus der Sheet-URL) ---
       - key: SPREADSHEET_ID
-        value: 1a0L9E798ChgwWh7X0xZFoRnHi53RAIeqkno3-_Z25M0
+        value: 1mrNTL18VUoYKREXgazVhlMjqDHP9UrtDsdXDS-vlwhE
       - key: CACHE_TTL_SECONDS
         value: "900"
       # --- KI-Chatbot (optional) – Anthropic-API-Key ---
@@ -43,8 +43,9 @@ services:
       # Hat Vorrang vor Supermetrics, wenn gesetzt.
       - key: META_ACCESS_TOKEN
         sync: false
+      # Mehrere Werbekonten kommagetrennt: act_111,act_222 – beim Deploy eintragen
       - key: META_AD_ACCOUNT_ID
-        value: act_305949210219349
+        sync: false
       # --- Facebook-Ads via Supermetrics – optional, leer = aus ---
       - key: SUPERMETRICS_API_KEY
         sync: false
