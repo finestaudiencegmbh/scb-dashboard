@@ -14,7 +14,7 @@
     "build": "vite build",
     "start": "node server/index.js",
     "serve": "npm run build && npm run start",
-    "test": "node server/parser.test.mjs && node server/supermetrics.test.mjs && node server/meta.test.mjs && node server/combine.test.mjs && node server/features.test.mjs && node server/project.test.mjs && node server/attribution.test.mjs"
+    "test": "node server/parser.test.mjs && node server/supermetrics.test.mjs && node server/meta.test.mjs && node server/combine.test.mjs && node server/features.test.mjs && node server/project.test.mjs && node server/attribution.test.mjs && node server/adid.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

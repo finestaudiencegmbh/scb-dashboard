@@ -18,7 +18,7 @@ export const DEFAULT_PROJECT = {
   shortName: 'Dashboard',
   subtitle: 'Lead-Dashboard',
   slug: 'dashboard',
-  branding: { accent: '#d0bb5a', logo: '/logo.svg' },
+  branding: { accent: '#7aa2f7', logo: '/logo.svg' }, // neutraler Fallback, falls die Config kein Branding setzt
   features: { hasTickets: true, hasQuality: true },
   labels: { ticket: { one: 'Ticket', many: 'Tickets', short: 'Ticket' } },
   sheet: { ...DEFAULT_SHEET_CONFIG, utmRoles: DEFAULT_UTM_ROLES },

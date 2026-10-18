@@ -12,13 +12,13 @@
   --line-strong: rgba(var(--accent-rgb), 0.26);
   /* Akzentfarbe – wird zur Laufzeit aus project.config.json überschrieben
      (siehe web/src/project.jsx). --accent-rgb speist alle Transparenz-Töne. */
-  --accent-rgb: 208, 187, 90;
-  --accent: #d0bb5a;
-  --accent-2: #e3d088;
-  --accent-deep: #b89c3e;
-  --accent-hover: #e3d088;
+  --accent-rgb: 122, 162, 247;
+  --accent: #7aa2f7;
+  --accent-2: #a7c2fa;
+  --accent-deep: #5875b2;
+  --accent-hover: #a7c2fa;
   --accent-soft: rgba(var(--accent-rgb), 0.14);
-  --accent-ink: #ecdc97;
+  --accent-ink: #b7cdfb;
   --cyan: #5ec8d8;
   --green: #6fcf97;
   --radius: 22px;

@@ -106,8 +106,10 @@ export function buildDataset({ leads, tickets, overview }, cfg, features = {}, u
 
   // Leitet die Dimensions-Labels (Kampagne/Anzeigengruppe/Creative) aus einer
   // UTM-Kombination ab – einheitlich für Lead-UTM UND Ticket-UTM verwendbar.
-  const dimsFor = (utm) => {
-    const paid = isPaid(utm, paidAdsets, organicPatterns, roles, paidMediums);
+  // Eine Meta-Ad-ID gibt es nur bei bezahltem Traffic -> eindeutig Paid. Die
+  // Namen dazu löst resolveAdIds() (adid.js) später gegen Meta auf.
+  const dimsFor = (utm, adId = '') => {
+    const paid = Boolean(adId) || isPaid(utm, paidAdsets, organicPatterns, roles, paidMediums);
     const rawCampaign = roleOf(utm, roles, 'campaign');
     const rawAdset = roleOf(utm, roles, 'adset');
     const rawCreative = roleOf(utm, roles, 'creative');
@@ -153,7 +155,9 @@ export function buildDataset({ leads, tickets, overview }, cfg, features = {}, u
       wonAt: l.wonAt,
       ticketAt: null,
       utm: { ...l.utm },
+      adId: l.adId || '',
       ticketUtm: null,
+      ticketAdId: '',
       answers: hasQuality ? (t?.answers || null) : null,
     });
   }
@@ -171,7 +175,9 @@ export function buildDataset({ leads, tickets, overview }, cfg, features = {}, u
       wonAt: t.at || null,
       ticketAt: t.at || null,
       utm: { ...t.utm },
+      adId: t.adId || '',
       ticketUtm: { ...t.utm },
+      ticketAdId: t.adId || '',
       answers: hasQuality ? (t.answers || null) : null,
     });
   }
@@ -180,7 +186,7 @@ export function buildDataset({ leads, tickets, overview }, cfg, features = {}, u
   const records = [];
   for (const r of recs) {
     // Lead-Dimensionen aus der Lead-UTM
-    const ld = dimsFor(r.utm);
+    const ld = dimsFor(r.utm, r.adId);
     const paid = ld.paid;
     const { campaign, adset, creative } = ld;
     // Qualität hängt an den Fragebogen-Antworten. Auf einer Lead-Zeile ist sie
@@ -191,7 +197,7 @@ export function buildDataset({ leads, tickets, overview }, cfg, features = {}, u
     // wo es wirklich entstand – nicht in jeder Kampagne, in der die Person Lead war)
     let ticketCampaign = null, ticketAdset = null, ticketCreative = null;
     if (r.hasTicket) {
-      const td = dimsFor(r.ticketUtm || r.utm);
+      const td = dimsFor(r.ticketUtm || r.utm, r.ticketAdId || r.adId);
       ticketCampaign = td.campaign; ticketAdset = td.adset; ticketCreative = td.creative;
     }
 
@@ -213,6 +219,8 @@ export function buildDataset({ leads, tickets, overview }, cfg, features = {}, u
       campaign,
       adset,
       creative,
+      adId: r.adId,
+      ticketAdId: r.ticketAdId,
       placement: placementLabel(roleOf(r.utm, roles, 'placement')),
       placementRaw: roleOf(r.utm, roles, 'placement'),
       // Rohe UTM-Werte für den Quellen-Tab (Donut/Top-Listen)

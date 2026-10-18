@@ -13,7 +13,7 @@ export const DEFAULT_PROJECT = {
   shortName: 'Dashboard',
   subtitle: 'Lead-Dashboard',
   slug: 'dashboard',
-  branding: { accent: '#d0bb5a', logo: '/logo.svg' },
+  branding: { accent: '#7aa2f7', logo: '/logo.svg' }, // neutraler Fallback, falls die Config kein Branding setzt
   features: { hasTickets: true, hasQuality: true },
   labels: { ticket: { one: 'Ticket', many: 'Tickets', short: 'Ticket' } },
   answers: {},
@@ -79,8 +79,12 @@ export function ProjectProvider({ project, children }) {
   useEffect(() => {
     applyAccent(value.branding.accent);
     document.title = `${value.name} · ${value.subtitle}`;
-    const icon = document.querySelector('link[rel="icon"]');
-    if (icon && value.branding.logo) icon.setAttribute('href', value.branding.logo);
+    if (value.branding.logo) {
+      for (const link of document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')) {
+        link.setAttribute('href', value.branding.logo);
+        link.removeAttribute('type'); // PNG-Logo statt des SVG-Platzhalters
+      }
+    }
   }, [value]);
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

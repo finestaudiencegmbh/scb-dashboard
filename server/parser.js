@@ -44,6 +44,7 @@ export const DEFAULT_SHEET_CONFIG = {
       utmCampaign: ['utm_campaign'],
       utmTerm: ['utm_term'],
       utmContent: ['utm_content'],
+      adId: ['ad_id', 'h_ad_id', 'cmc_adid'],
     },
     tickets: {
       date: ['teilgenommen am'],
@@ -57,6 +58,7 @@ export const DEFAULT_SHEET_CONFIG = {
       utmCampaign: ['utm_campaign'],
       utmTerm: ['utm_term'],
       utmContent: ['utm_content'],
+      adId: ['ad_id', 'h_ad_id', 'cmc_adid'],
     },
     overview: {
       status: ['status'],
@@ -225,6 +227,15 @@ function utmOf(o, cols) {
   };
 }
 
+/**
+ * Meta-Ad-ID aus der Zeile ({{ad.id}} im URL-Parameter). Akzeptiert auch
+ * Präfixe wie "fb_120212345678901234" (cmc_adid). Leer, wenn keine ID drinsteht.
+ */
+function adIdOf(o, cols) {
+  const m = norm(pick(o, cols.adId)).match(/\d{6,}/);
+  return m ? m[0] : '';
+}
+
 function parseLeadRow(o, cols) {
   const wonAt = parseDate(pick(o, cols.date));
   if (!wonAt) return null; // Zähl-/Summenzeilen ohne gültiges Datum überspringen
@@ -234,6 +245,7 @@ function parseLeadRow(o, cols) {
     lastName: norm(pick(o, cols.lastName)),
     email: normEmail(pick(o, cols.email)),
     utm: utmOf(o, cols),
+    adId: adIdOf(o, cols),
     ticketAt: parseDate(pick(o, cols.ticketDate)),
   };
 }
@@ -255,6 +267,7 @@ function parseTicketRow(o, cols, answerCfg) {
     phone: norm(pick(o, cols.phone)),
     answers,
     utm: utmOf(o, cols),
+    adId: adIdOf(o, cols),
   };
 }
 

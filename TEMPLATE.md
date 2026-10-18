@@ -71,12 +71,35 @@ entsprechende Ebene im Dashboard leer – dort gibt es dann nichts zu optimieren
 **Empfohlener URL-Parameter-String in Meta** (Werbeanzeigenebene → „URL-Parameter"):
 
 ```
-utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}
+utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}&ad_id={{ad.id}}
 ```
 
 Damit greift die Zuordnung Kampagne → Anzeigengruppe → Creative durchgehend.
 Fehlt `utm_content`, gibt es keine Creative-Auswertung – und genau die ist der
 Hauptgrund für dieses Dashboard.
+
+Läuft parallel **Hyros**, belegt dessen Schema die UTM-Parameter anders
+(`utm_source={{adset.name}}&utm_medium={{ad.name}}&utm_campaign={{campaign.name}}&utm_term={{placement}}&ad_id={{ad.id}}&…`).
+Dann `utmRoles` entsprechend setzen:
+
+```jsonc
+"utmRoles": { "campaign": "campaign", "adset": "source", "creative": "medium", "placement": "term" }
+```
+
+### Ad-ID: die sichere Zuordnung
+
+Steht `{{ad.id}}` im URL-Parameter und landet als Spalte `ad_id` im Sheet
+(Lead-Tab **und** Umfrage-Tab), gewinnt die ID gegen alle UTM-Namen:
+`server/adid.js` schlägt die Anzeige in Metas Ad-Liste nach und übernimmt
+Kampagne, Anzeigengruppe und Creative 1:1 aus Meta. Umbenannte oder kopierte
+Anzeigen, Tippfehler und ein Wechsel des UTM-Schemas mitten in der Kampagne
+spielen dann keine Rolle mehr. Eine Zeile mit Ad-ID gilt immer als bezahlt.
+
+Erkannt werden die Spalten `ad_id`, `h_ad_id` und `cmc_adid` (Präfixe wie
+`fb_` werden entfernt), konfigurierbar unter `sheet.columns.*.adId`. Zeilen
+ohne ID oder mit einer ID, die Meta nicht liefert (anderes, nicht angebundenes
+Werbekonto), behalten ihre UTM-Zuordnung. Wie viele Zeilen aufgelöst wurden,
+steht in `/api/data` unter `fb.adIds`.
 
 ### Bezahlt oder organisch?
 
@@ -198,9 +221,18 @@ eine Note zu erfinden.
 
 ### Logo
 
-`web/public/logo.svg` ersetzen oder eine neue Datei dort ablegen und in
-`branding.logo` eintragen. Das mitgelieferte Logo nutzt die Akzentfarbe – wenn
-du ein SVG behältst, dort den Hex-Wert mitändern.
+Eine Datei in `web/public/` ablegen (SVG oder PNG, quadratisch, mind. 256 px)
+und in `branding.logo` eintragen, z. B. `"/logo.png"`. Sie erscheint in der
+Sidebar, mobil in der Topbar und als Favicon. Das Dashboard ist dunkel: ein
+Logo mit dunklen Linien auf transparentem Grund verschwindet. Besser die
+Variante auf einer farbigen Fläche nehmen. `web/public/logo.svg` ist der
+neutrale Platzhalter für Projekte ohne eigenes Logo.
+
+### Akzentfarbe
+
+Aus der Brand-Palette die hellste kräftige Farbe nehmen, nicht automatisch die
+Primärfarbe. Dunkle Töne (Bordeaux, Navy) gehen auf dem dunklen Hintergrund
+unter. Buttons, Linien, Glow und Hover leiten sich aus diesem einen Hex-Wert ab.
 
 ## 3. Weitere Konfigurationsdateien (meist unverändert)
 
@@ -232,7 +264,11 @@ synthetischen Daten – gut zum Ansehen des Layouts vor dem echten Anschluss.
 1. Im **Meta Business Manager** eine App mit Zugriff auf das Werbekonto anlegen.
 2. Access-Token mit der Berechtigung **`ads_read`** erzeugen (langlebiges Token
    verwenden, sonst läuft es nach Stunden ab).
-3. Werbekonto-ID (`act_…`) eintragen. Mehrere Konten: kommagetrennt.
+3. Werbekonto-ID (`act_…`) eintragen. Mehrere Konten: kommagetrennt
+   (`act_111,act_222`). Es gibt **ein** Token für alle Konten – der dahinter
+   stehende User bzw. System-User braucht `ads_read` auf jedem Konto. Fällt ein
+   Konto aus (fehlende Rechte, Tippfehler in der ID), laufen die übrigen weiter
+   und das Dashboard zeigt einen Hinweis-Banner mit dem Grund.
 
 ## 6. Lokal starten
 
@@ -253,6 +289,17 @@ ersetzen.
 
 `render.yaml` ist ein fertiger Blueprint. Alle Secrets stehen auf `sync: false`
 und werden beim Deploy abgefragt.
+
+1. Repo nach GitHub pushen.
+2. Render → **New → Blueprint** → Repo wählen. Render liest `render.yaml` und
+   legt den Web-Service mit dem dort gesetzten `name` an.
+3. Die abgefragten Secrets eintragen: `GOOGLE_SERVICE_ACCOUNT_JSON` (eine
+   Zeile), `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID`, `DASHBOARD_USER`,
+   `DASHBOARD_PASSWORD`, `ANTHROPIC_API_KEY`. Supermetrics leer lassen.
+4. Deploy abwarten, `https://<name>.onrender.com/api/health` muss
+   `"mode":"google"` liefern. Steht dort `demo`, fehlt der Service-Account.
+5. Auf dem Free-Plan schläft der Service nach 15 Minuten ohne Aufruf ein; der
+   erste Aufruf danach dauert ca. 30 Sekunden. Für Kundenzugriff Starter-Plan.
 
 **Zum Service-Namen:** Render ordnet Services über den `name` in der
 `render.yaml` zu. Bei einem NEUEN Projekt den Namen einmal sauber setzen, bevor
@@ -326,13 +373,14 @@ Ad-Status.
 - [ ] `config/project.config.json`: `features.hasTickets` / `hasQuality` gesetzt
 - [ ] `config/project.config.json`: `labels.ticket` passend benannt
 - [ ] `config/project.config.json`: `sheet.utmRoles` gegen das echte URL-Schema geprüft
+- [ ] Meta-URL-Parameter enthält `ad_id={{ad.id}}`, Spalte `ad_id` in Lead- und Umfrage-Tab
 - [ ] `config/project.config.json`: `sheet.detect` und `sheet.columns` gegen das echte Sheet geprüft
 - [ ] `config/project.config.json`: `sheet.answers` auf den neuen Fragebogen gemappt
 - [ ] `config/campaigns.json`: `organicPatterns` und `paidMediums` geprüft
 - [ ] `server/project.test.mjs`: Fixtures auf die echten Sheet-Kopfzeilen umgestellt
 - [ ] `config/scoring.json`: Bewertungsmodell geprüft (oder unverändert übernommen)
-- [ ] `web/public/logo.svg` ersetzt
-- [ ] `render.yaml`: `name` angepasst
+- [ ] Logo in `web/public/` abgelegt und in `branding.logo` eingetragen
+- [ ] `render.yaml`: `name` und `SPREADSHEET_ID` angepasst
 - [ ] Sheet für den Service-Account freigegeben
 - [ ] `.env` gefüllt, `npm test` grün, `npm run dev` zeigt echte Zahlen
 
@@ -342,6 +390,7 @@ Ad-Status.
 Google Sheet ─► sheets.js ─► parser.js ─┐
                                         ├─► build.js ─► Lead-Records (UTM → Kampagne/Anzeigengruppe/Creative)
 Meta API ────► meta.js ─────────────────┘        │
+                                                 ├─► adid.js ─► Ad-ID schlägt UTM-Namen
                                                  └─► combine.js ─► Hierarchie + Tagesreihen
                                                                         │
                                         index.js (/api/data, /api/config)
