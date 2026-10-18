@@ -21,8 +21,15 @@ export function GlowDefs({ ids, w, h, colors = [] }) {
   return (
     <defs>
       <filter id={ids.glow} filterUnits="userSpaceOnUse" x={-20} y={-20} width={w + 40} height={h + 40}>
-        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="wide" />
-        <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="tight" />
+        {/* Stärke des Scheins: stdDeviation = Reichweite, slope = Deckkraft */}
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="wideBlur" />
+        <feComponentTransfer in="wideBlur" result="wide">
+          <feFuncA type="linear" slope="0.6" />
+        </feComponentTransfer>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="tightBlur" />
+        <feComponentTransfer in="tightBlur" result="tight">
+          <feFuncA type="linear" slope="0.75" />
+        </feComponentTransfer>
         <feMerge>
           <feMergeNode in="wide" />
           <feMergeNode in="tight" />
