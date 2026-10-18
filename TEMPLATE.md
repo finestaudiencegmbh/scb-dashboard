@@ -228,7 +228,20 @@ Logo mit dunklen Linien auf transparentem Grund verschwindet. Besser die
 Variante auf einer farbigen Fläche nehmen. `web/public/logo.svg` ist der
 neutrale Platzhalter für Projekte ohne eigenes Logo.
 
-### Akzentfarbe
+### Akzentfarbe, Verlauf und Hintergrund
+
+```jsonc
+"branding": {
+  "accent": "#d51b35",                            // Linien, Glow, Rahmen, Hover
+  "gradient": ["#ff5656", "#d51b35", "#551528"],  // optional: Buttons, aktive Tabs, Navigation
+  "background": "#0a0a0a"                         // optional: Grundton, Panels leiten sich ab
+}
+```
+
+Ohne `gradient` entsteht der Verlauf automatisch aus `accent` (hell -> Akzent
+-> dunkel). Ohne `background` bleibt das neutrale Premium-Schwarz. Die
+Textfarbe auf Akzentflächen wählt das Dashboard selbst: dunkel auf hellen
+Akzenten wie Gold oder Gelb, weiß auf kräftigen wie Rot oder Blau.
 
 Aus der Brand-Palette die hellste kräftige Farbe nehmen, nicht automatisch die
 Primärfarbe. Dunkle Töne (Bordeaux, Navy) gehen auf dem dunklen Hintergrund

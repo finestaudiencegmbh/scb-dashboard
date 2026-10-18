@@ -90,7 +90,7 @@ export default function TimeChart({ title, series, formatY = (v) => v, formatX =
               <g key={s.key}>
                 <path d={area} fill={`url(#${ids.area(si)})`} />
                 <path d={line} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" filter={`url(#${ids.glow})`} />
-                {hover != null && <circle cx={pts[hover].x} cy={pts[hover].y} r="4" fill={s.color} stroke="#0b0b14" strokeWidth="1.5" filter={`url(#${ids.glow})`} />}
+                {hover != null && <circle cx={pts[hover].x} cy={pts[hover].y} r="4" fill={s.color} strokeWidth="1.5" style={{ stroke: 'var(--bg-2)' }} filter={`url(#${ids.glow})`} />}
               </g>
             );
           })}

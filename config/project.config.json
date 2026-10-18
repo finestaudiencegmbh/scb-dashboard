@@ -4,8 +4,13 @@
   "shortName": "Secret Creators",
   "subtitle": "Live-Webinar · 01.11.",
   "slug": "secret-creators",
-  "_comment_branding": "accent = Akzentfarbe (Hex). Hover-/Glow-/Linien-Töne werden daraus automatisch abgeleitet. logo = Pfad im Ordner web/public. Secret Creators: Joyful #FFF172 aus den Brand Guidelines (die Primärfarbe Bold #551528 ist auf dem dunklen Dashboard-Hintergrund nicht lesbar). Logo = Brandmark in der freigegebenen Farbvariante auf Joyful.",
-  "branding": { "accent": "#fff172", "logo": "/logo.png" },
+  "_comment_branding": "accent = Akzentfarbe (Hex), daraus werden Hover-, Glow- und Linien-Töne abgeleitet. gradient = optionale Farbstopps für Buttons, aktive Tabs und Navigation (sonst hell -> Akzent -> dunkel aus accent). background = Grundton des Dashboards, Panels/Sidebar/Topbar leiten sich davon ab. Die Textfarbe auf Akzentflächen (hell/dunkel) wird automatisch gewählt. logo = Pfad im Ordner web/public. Secret Creators: Juicy #D51B35 als Akzent, Verlauf Feminine #FF5656 -> Juicy -> Bold #551528, Premium-Schwarz als Hintergrund. Logo = Brandmark in der freigegebenen Farbvariante auf Joyful.",
+  "branding": {
+    "accent": "#d51b35",
+    "gradient": ["#ff5656", "#d51b35", "#551528"],
+    "background": "#0a0a0a",
+    "logo": "/logo.png"
+  },
   "_comment_features": "hasTickets: zweite Conversion-Stufe (hier: die ausgefüllte VIP-Umfrage = VIP-Ticket) vorhanden? false = alle Ticket-KPIs verschwinden. hasQuality: Fragebogen + Lead-Scoring vorhanden? false = Quali-Rate, Ø Quali, Tiers, Antworten-Details und Quali-Filter verschwinden. hasQuality setzt hasTickets voraus – die Fragebogen-Antworten stecken im Umfrage-Tab des Sheets.",
   "features": { "hasTickets": true, "hasQuality": true },
   "_comment_labels": "Wie die zweite Stufe im Dashboard heißt. one = Einzahl, many = Mehrzahl, short = Kürzel für Badges/Tabellenspalten.",

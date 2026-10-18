@@ -270,7 +270,7 @@ function OverlayChart({ series, hourly = false }) {
           ))}
           {hover != null && <line x1={x(hover)} y1={pad.t} x2={x(hover)} y2={pad.t + plotH} className="chart-hover-line" />}
           {hover != null && prepared.map((s) => s.pts[hover] && (
-            <circle key={s.key} cx={s.pts[hover].x} cy={s.pts[hover].y} r="4" fill={s.color} stroke="#0b0b14" strokeWidth="1.5" filter={`url(#${ids.glow})`} />
+            <circle key={s.key} cx={s.pts[hover].x} cy={s.pts[hover].y} r="4" fill={s.color} strokeWidth="1.5" style={{ stroke: 'var(--bg-2)' }} filter={`url(#${ids.glow})`} />
           ))}
           {Array.from({ length: 5 }, (_, k) => Math.round((k * (dates.length - 1)) / 4)).filter((v, i, a) => a.indexOf(v) === i).map((i) => (
             <text key={i} x={x(i)} y={h - 8} className="chart-axis" textAnchor="middle">{fmtX(dates[i])}</text>
