@@ -447,6 +447,32 @@ export function qualityByDay(leads) {
     .map((e) => ({ date: e.date, value: e.n ? Math.round(e.sum / e.n) : null }));
 }
 
+/**
+ * Verlauf der Lead-Qualität für den Graphen: pro Tag, sobald es Tickets an
+ * mindestens zwei Tagen gibt. Liegen alle an EINEM Tag, pro Stunde dieses
+ * Tages – sonst bliebe der Graph leer, bis der zweite Tag erreicht ist.
+ * Bucket-Keys: Tag "YYYY-MM-DD", Stunde "YYYY-MM-DDTHH:00".
+ */
+export function qualityTrend(leads) {
+  const daily = qualityByDay(leads);
+  if (daily.length !== 1) return { mode: 'day', points: daily };
+  const m = new Map();
+  for (const l of leads) {
+    if (!l.hasTicket || !l.quality) continue;
+    const stamp = String(l.ticketAt || l.wonAt || '');
+    const key = `${stamp.slice(0, 13)}:00`;
+    if (key.length < 16) continue;
+    if (!m.has(key)) m.set(key, { date: key, sum: 0, n: 0 });
+    const e = m.get(key);
+    e.sum += l.quality.score;
+    e.n += 1;
+  }
+  const points = [...m.values()]
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .map((e) => ({ date: e.date, value: Math.round(e.sum / e.n) }));
+  return { mode: 'hour', points };
+}
+
 export function tierDistribution(leads, tiers) {
   const dist = {};
   for (const t of tiers) dist[t.key] = 0;

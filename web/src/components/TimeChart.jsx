@@ -6,7 +6,7 @@ import { GlowDefs, useChartIds } from './ChartGlow.jsx';
  * series: [{ key, label, color, data: [{date, value}] }]
  * Tooltip beim Überfahren zeigt alle Serien für den jeweiligen Tag.
  */
-export default function TimeChart({ title, series, formatY = (v) => v, formatX = fmtDay, height = 220 }) {
+export default function TimeChart({ title, series, formatY = (v) => v, formatX = fmtDay, height = 220, maxY: fixedMax = null }) {
   const [hover, setHover] = useState(null);
   const ids = useChartIds();
 
@@ -18,7 +18,8 @@ export default function TimeChart({ title, series, formatY = (v) => v, formatX =
       const m = new Map(s.data.map((d) => [d.date, d.value]));
       return dates.map((dt) => m.get(dt) ?? 0);
     });
-    const maxY = Math.max(1, ...byDate.flat());
+    // feste Skala (z. B. 0–100 % bei der Lead-Qualität) oder bis zum Maximum
+    const maxY = fixedMax ?? Math.max(1, ...byDate.flat());
     const w = 760;
     const h = height;
     const pad = { l: 52, r: 16, t: 14, b: 30 };
@@ -28,7 +29,7 @@ export default function TimeChart({ title, series, formatY = (v) => v, formatX =
     const y = (v) => pad.t + plotH - (v / maxY) * plotH;
     const points = series.map((s, si) => byDate[si].map((v, i) => ({ x: x(i), y: y(v), v })));
     return { dates, points, maxY, pad, w, h, plotW, plotH, x, y };
-  }, [series, height]);
+  }, [series, height, fixedMax]);
 
   if (dates.length === 0) {
     return (
@@ -90,6 +91,8 @@ export default function TimeChart({ title, series, formatY = (v) => v, formatX =
               <g key={s.key}>
                 <path d={area} fill={`url(#${ids.area(si)})`} />
                 <path d={line} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" filter={`url(#${ids.glow})`} />
+                {/* nur ein Messpunkt: als Punkt zeigen, eine Linie gäbe es nicht */}
+                {pts.length === 1 && hover == null && <circle cx={pts[0].x} cy={pts[0].y} r="5" fill={s.color} filter={`url(#${ids.glow})`} />}
                 {hover != null && <circle cx={pts[hover].x} cy={pts[hover].y} r="4" fill={s.color} strokeWidth="1.5" style={{ stroke: 'var(--bg-2)' }} filter={`url(#${ids.glow})`} />}
               </g>
             );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmtEur, fmtInt, fmtPct, fmtQuality } from '../lib.js';
+import { fmtEur, fmtInt, fmtPct, fmtQuality, fmtClock } from '../lib.js';
 import { useProject } from '../project.jsx';
 import TimeChart from './TimeChart.jsx';
 
@@ -17,7 +17,7 @@ function Card({ label, value, sub, accent }) {
 const CYAN = '#5ec8d8';
 const GREEN = '#6fcf97';
 
-export default function Kpis({ kpis, dist, tiers, qualifiedTiers = ['A', 'B'], qualityDaily = [] }) {
+export default function Kpis({ kpis, dist, tiers, qualifiedTiers = ['A', 'B'], qualityDaily = { mode: 'day', points: [] } }) {
   const { features, labels, branding } = useProject();
   const { hasTickets, hasQuality } = features;
   const T = labels.ticket;
@@ -82,13 +82,13 @@ export default function Kpis({ kpis, dist, tiers, qualifiedTiers = ['A', 'B'], q
               </div>
             </div>
           </div>
-          {qualityDaily.length >= 2 && (
-            <div className="kpi-quality-chart">
-              <TimeChart title="Lead-Qualität pro Tag" height={200}
-                formatY={(v) => `${Math.round(v)} %`}
-                series={[{ key: 'q', label: 'Lead-Qualität', color: GREEN, data: qualityDaily.map((d) => ({ date: d.date, value: d.value })) }]} />
-            </div>
-          )}
+          <div className="kpi-quality-chart">
+            <TimeChart title={qualityDaily.mode === 'hour' ? 'Lead-Qualität pro Stunde' : 'Lead-Qualität pro Tag'} height={200}
+              formatY={(v) => `${Math.round(v)} %`}
+              formatX={qualityDaily.mode === 'hour' ? fmtClock : undefined}
+              maxY={100}
+              series={[{ key: 'q', label: 'Lead-Qualität', color: GREEN, data: qualityDaily.points }]} />
+          </div>
         </section>
       )}
     </div>

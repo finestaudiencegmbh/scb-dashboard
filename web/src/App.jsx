@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchData } from './api.js';
-import { applyFilters, aggregate, computeKpis, tierDistribution, leadsByDay, leadsByTime, cplByDay, qualityByDay, qualifiedTiersOf, fmtDate } from './lib.js';
+import { applyFilters, aggregate, computeKpis, tierDistribution, leadsByDay, leadsByTime, cplByDay, qualityTrend, qualifiedTiersOf, fmtDate } from './lib.js';
 import Kpis from './components/Kpis.jsx';
 import Filters from './components/Filters.jsx';
 import BreakdownTable from './components/BreakdownTable.jsx';
@@ -74,7 +74,7 @@ export default function App() {
   const hourlyDay = (range.from && range.to && range.from === range.to) ? range.from : null;
   const leadDaily = useMemo(() => (data ? leadsByTime(filtered, hourlyDay) : []), [data, filtered, hourlyDay]);
   const cplDaily = useMemo(() => ((hasFb && fb.daily) ? cplByDay(fb.daily.spend, filtered) : []), [hasFb, fb, filtered]);
-  const qualityDaily = useMemo(() => (data ? qualityByDay(filtered) : []), [data, filtered]);
+  const qualityDaily = useMemo(() => (data ? qualityTrend(filtered) : { mode: 'day', points: [] }), [data, filtered]);
 
   const [orgDrill, setOrgDrill] = useState(''); // organische Kampagne, in die reingezoomt wurde
 
