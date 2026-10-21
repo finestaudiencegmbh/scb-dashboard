@@ -279,10 +279,16 @@ synthetischen Daten – gut zum Ansehen des Layouts vor dem echten Anschluss.
 2. Access-Token mit der Berechtigung **`ads_read`** erzeugen (langlebiges Token
    verwenden, sonst läuft es nach Stunden ab).
 3. Werbekonto-ID (`act_…`) eintragen. Mehrere Konten: kommagetrennt
-   (`act_111,act_222`). Es gibt **ein** Token für alle Konten – der dahinter
-   stehende User bzw. System-User braucht `ads_read` auf jedem Konto. Fällt ein
-   Konto aus (fehlende Rechte, Tippfehler in der ID), laufen die übrigen weiter
-   und das Dashboard zeigt einen Hinweis-Banner mit dem Grund.
+   (`act_111,act_222`). Diese Konten laufen alle mit `META_ACCESS_TOKEN`; der
+   dahinter stehende User bzw. System-User braucht `ads_read` auf jedem Konto.
+4. Konto aus einem **anderen Business Portfolio** mit eigenem Token: als Paar
+   `META_ACCESS_TOKEN_2` + `META_AD_ACCOUNT_ID_2` eintragen (weitere: `_3` bis
+   `_9`).
+
+Fällt ein Konto aus (fehlende Rechte, abgelaufenes Token, Tippfehler in der
+ID), laufen die übrigen weiter. Unten in der Sidebar unter „Datenquellen" steht
+jedes Konto mit Punkt: grün = liefert Daten, gelb = verbunden, aber im Zeitraum
+keine Kampagnen, rot = nicht geladen (Grund beim Drüberfahren).
 
 ## 6. Lokal starten
 
@@ -343,6 +349,7 @@ npm run serve   # lokal wie in Production (Build + Server auf einem Port)
 |---|---|---|
 | `META_ACCESS_TOKEN` | `EAAG…` | Token mit `ads_read`. |
 | `META_AD_ACCOUNT_ID` | `act_123…` | Werbekonto; mehrere kommagetrennt. |
+| `META_ACCESS_TOKEN_2` / `META_AD_ACCOUNT_ID_2` | | Weiteres Konto mit eigenem Token, z. B. aus einem anderen Business Portfolio. Weitere Paare `_3` bis `_9`. Fehlt das Token eines Paares, gilt `META_ACCESS_TOKEN`. |
 | `META_API_VERSION` | `v21.0` | Optional, Graph-API-Version. |
 | `META_LOOKBACK_DAYS` | `90` | Optional, Zeitfenster ohne expliziten Datumsbereich. |
 

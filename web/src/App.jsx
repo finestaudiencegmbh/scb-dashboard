@@ -12,6 +12,7 @@ import DateRangePicker from './components/DateRangePicker.jsx';
 import SourcesView from './components/SourcesView.jsx';
 import ChatBot from './components/ChatBot.jsx';
 import LeadHeatmap from './components/LeadHeatmap.jsx';
+import DataSources from './components/DataSources.jsx';
 import { useProject } from './project.jsx';
 import { fmtEur, fmtInt } from './lib.js';
 
@@ -115,6 +116,7 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
+          <DataSources data={data} />
           {data && <span className="updated">Stand: {fmtDate(data.fetchedAt)}</span>}
         </div>
       </aside>
@@ -247,6 +249,9 @@ export default function App() {
             )}
 
             {view === 'sources' && <SourcesView leads={filtered} />}
+
+            {/* Mobil ist die Sidebar-Fußzeile ausgeblendet -> Status hier unten */}
+            <div className="ds-mobile"><DataSources data={data} /></div>
 
             <footer className="footer">
               {data.counts.leads} Leads · {data.counts.paidLeads} bezahlt

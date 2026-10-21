@@ -46,6 +46,12 @@ services:
       # Mehrere Werbekonten kommagetrennt: act_111,act_222 – beim Deploy eintragen
       - key: META_AD_ACCOUNT_ID
         sync: false
+      # Weiteres Konto mit eigenem Token (z. B. anderes Business Portfolio).
+      # Weitere Paare: _3, _4 … bis _9 (direkt in Render anlegen).
+      - key: META_ACCESS_TOKEN_2
+        sync: false
+      - key: META_AD_ACCOUNT_ID_2
+        sync: false
       # --- Facebook-Ads via Supermetrics – optional, leer = aus ---
       - key: SUPERMETRICS_API_KEY
         sync: false

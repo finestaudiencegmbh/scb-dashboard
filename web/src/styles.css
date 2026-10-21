@@ -409,6 +409,18 @@ body {
 .nav-item.active { background: var(--accent-grad); color: var(--on-accent); font-weight: 650; box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.3); }
 .nav-item svg { flex-shrink: 0; }
 .sidebar-foot { margin-top: auto; padding: 12px 14px 4px; border-top: 1px solid var(--line); }
+
+/* ---- Datenquellen-Status (Sidebar-Fußzeile, mobil am Seitenende) ---- */
+.ds { margin-bottom: 12px; }
+.ds-title { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
+.ds-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ds-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--ink-soft); cursor: default; min-width: 0; }
+.ds-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--faint); }
+.ds-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.ds-dot.idle { background: #f2c94c; box-shadow: 0 0 6px rgba(242, 201, 76, 0.6); }
+.ds-dot.err { background: #ff4d4f; box-shadow: 0 0 8px rgba(255, 77, 79, 0.7); }
+.ds-mobile { display: none; }
 .content { flex: 1; min-width: 0; max-width: 1320px; margin: 0 auto; padding: 0 28px 80px; }
 .content .topbar { margin-left: -28px; margin-right: -28px; padding-left: 28px; padding-right: 28px; }
 @media (max-width: 860px) {
@@ -417,6 +429,7 @@ body {
   .brand { padding: 4px 8px; }
   .nav { flex-direction: row; }
   .sidebar-foot { display: none; }
+  .ds-mobile { display: block; margin-top: 8px; padding: 16px 4px 0; border-top: 1px solid var(--line); }
 }
 
 /* ---- Quellen-View ---- */

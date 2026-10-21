@@ -10,7 +10,10 @@
  *
  * Benötigte .env:
  *   META_ACCESS_TOKEN   – Access-Token mit ads_read
- *   META_AD_ACCOUNT_ID  – Werbekonto, z. B. act_367913946654819
+ *   META_AD_ACCOUNT_ID  – Werbekonto, z. B. act_367913946654819 (mehrere kommagetrennt)
+ * Weitere Konten mit EIGENEM Token (z. B. aus einem anderen Business Portfolio):
+ *   META_ACCESS_TOKEN_2 + META_AD_ACCOUNT_ID_2, _3, … bis _9. Fehlt das Token
+ *   eines Paares, gilt META_ACCESS_TOKEN.
  * Optional:
  *   META_API_VERSION    – Graph-API-Version (Default v21.0)
  *   META_LOOKBACK_DAYS  – Zeitfenster in Tagen (Default 90)
@@ -19,7 +22,7 @@
 const GRAPH = 'https://graph.facebook.com';
 
 export function isMetaConfigured() {
-  return Boolean(process.env.META_ACCESS_TOKEN && process.env.META_AD_ACCOUNT_ID);
+  return accountTargets().length > 0;
 }
 
 const ymd = (d) => d.toISOString().slice(0, 10);
@@ -54,12 +57,33 @@ function cfg() {
 }
 
 /** Liest ein ODER mehrere Werbekonten aus META_AD_ACCOUNT_ID (kommagetrennt). */
-function accountIds() {
-  return String(process.env.META_AD_ACCOUNT_ID || '')
+function accountIds(value = process.env.META_AD_ACCOUNT_ID) {
+  return String(value || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
     .map(normAccount);
+}
+
+/**
+ * Alle Werbekonten mit dem jeweils passenden Token:
+ *   META_AD_ACCOUNT_ID   (+ META_ACCESS_TOKEN)
+ *   META_AD_ACCOUNT_ID_2 (+ META_ACCESS_TOKEN_2, sonst META_ACCESS_TOKEN) … bis _9
+ * Ein Konto, das mehrfach eingetragen ist, wird nur einmal abgefragt.
+ */
+export function accountTargets(env = process.env) {
+  const targets = [];
+  const seen = new Set();
+  for (const suffix of ['', ...Array.from({ length: 8 }, (_, i) => `_${i + 2}`)]) {
+    const token = env[`META_ACCESS_TOKEN${suffix}`] || env.META_ACCESS_TOKEN;
+    if (!token) continue;
+    for (const account of accountIds(env[`META_AD_ACCOUNT_ID${suffix}`])) {
+      if (seen.has(account)) continue;
+      seen.add(account);
+      targets.push({ account, token });
+    }
+  }
+  return targets;
 }
 
 function dateRange(lookback) {
@@ -266,15 +290,15 @@ export async function fetchMetaAll(customRange) {
   if (!isMetaConfigured()) return null;
   const base = cfg();
   const range = customRange?.since && customRange?.until ? customRange : dateRange(base.lookback);
-  const ids = accountIds();
+  const targets = accountTargets();
 
   // Pro Konto alles parallel holen. Schlägt EIN Konto fehl, wird es übersprungen
   // (Warnung im Log), damit die übrigen Konten trotzdem angezeigt werden.
   const accountErrors = [];
   const perAccount = (await Promise.all(
-    ids.map(async (account) => {
+    targets.map(async ({ account, token }) => {
       try {
-        const c = { ...base, account };
+        const c = { ...base, account, token };
         const [records, entities, daily, dailyEntities, status, name] = await Promise.all([
           fetchPlacementRecords(c, range),
           fetchEntities(c, range),
@@ -329,7 +353,7 @@ export async function fetchMetaAll(customRange) {
   return {
     records, entities, daily, dailyEntities, campaignStatus, adsetStatus, adStatus, adList, range, accounts,
     // Diagnose: wie viele Konten waren angefragt, welche scheiterten?
-    accountsRequested: ids.length,
+    accountsRequested: targets.length,
     accountErrors,
   };
 }
