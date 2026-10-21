@@ -1,7 +1,7 @@
 {
-  "_comment": "VORLÄUFIGES Bewertungsmodell für die Lead-Qualität von Secret Creators (Live-Webinar). Bewertet werden die Antworten aus dem Tab 'Live-Webinar … Umfrage'. Übernommen vom letzten Workshop und auf die Fragen dieser Umfrage reduziert: Es gibt keine Dringlichkeits-Frage mehr, bewertbar sind nur Einkommen und Berufsbezeichnung. Die finale Einordnung (inkl. Freitext-Fragen) folgt. Geändert wird hier – nicht im Code. Nach dem Speichern im Dashboard auf 'Aktualisieren' klicken.",
+  "_comment": "Bewertungsmodell für die Lead-Qualität von Secret Creators (Live-Webinar). Bewertet werden die Antworten aus dem Umfrage-Tab ('Was machst du gerade beruflich?' = Spalte Berufsbezeichnung, 'Dein monatliches Netto-Einkommen' = Spalte Monatliches Einkommen). Geändert wird hier – nicht im Code. Nach dem Speichern im Dashboard auf 'Aktualisieren' klicken.",
 
-  "_comment_logik": "Feste Geschäftsregeln statt Punkte-Mischung. Reihenfolge der Prüfung: (1) Disqualifikation über die Berufsbezeichnung (Rentner/Schüler/Arbeitssuchend) -> D. (2) Mittelfeld 2.000–2.999 € UND selbstständig/Unternehmer -> B. (3) sonst entscheidet das Einkommen: ab 3.000 € -> A, 2.000–2.999 € -> C, darunter -> D. Die Berufsbezeichnung fließt mit Gewicht 0 nicht in den gerechneten Score ein, wirkt aber über die Regeln.",
+  "_comment_logik": "Feste Geschäftsregeln: (1) Rentner oder Arbeitssuchend -> immer D, egal welches Einkommen. (2) Sonst entscheidet allein das Einkommen: ab 2.500 € -> A, 1.500–2.499 € -> B, unter 1.500 € -> C. Angestellt, Selbstständig/Unternehmer und Elternzeit werden nur über das Einkommen eingestuft.",
 
   "_comment_skala": "Die Punktwerte sind eine SCHULNOTEN-SKALA: D = 0, C = 40, B = 70, A = 100. Das Dashboard zeigt als Lead-Qualität den Durchschnitt dieser Punkte in Prozent. Wer die Stufen verschiebt, muss die 'tiers' unten mitziehen (A ab 75, B ab 55, C ab 35).",
 
@@ -10,37 +10,28 @@
     "employment": 0
   },
 
-  "_comment_rules": "Harte Geschäftsregeln, der Reihe nach geprüft; die erste passende gewinnt und schlägt den gerechneten Score. 'any' = eine Bedingung reicht, 'all' = alle müssen passen. match/matchAny wird case-insensitiv als Teilstring gegen die Antwort geprüft. setScore erzwingt, minScore/maxScore heben bzw. deckeln.",
+  "_comment_rules": "Harte Geschäftsregeln, der Reihe nach geprüft; die erste passende gewinnt und schlägt den gerechneten Score. 'any' = eine Bedingung reicht. matchAny wird case-insensitiv als Teilstring gegen die Antwort geprüft. setScore erzwingt den Wert.",
   "rules": [
     {
-      "_comment": "Disqualifikation über die Berufsbezeichnung. Die Antwortoptionen der neuen Umfrage sind noch nicht final bestätigt; die Teilstrings decken die üblichen Schreibweisen ab.",
-      "label": "Disqualifiziert: kein planbares Einkommen",
+      "label": "D: Rentner oder Arbeitssuchend",
       "any": [
-        { "dim": "employment", "matchAny": ["rentner", "schüler", "student", "arbeitssuchend", "arbeitslos"] }
+        { "dim": "employment", "matchAny": ["rentner", "arbeitssuchend", "arbeitslos"] }
       ],
       "setScore": 0
-    },
-    {
-      "label": "Mittelfeld mit Kaufsignal: selbstständig oder Unternehmer",
-      "all": [
-        { "dim": "income", "atLeast": 2000, "below": 3000 },
-        { "dim": "employment", "matchAny": ["selbstständig", "selbststaendig", "selbständig", "unternehmer"] }
-      ],
-      "setScore": 70
     }
   ],
 
   "income": {
-    "_comment": "Monatliches Einkommen (Spalte I der Umfrage). Bestätigte Option bisher: 'Über 5.000 €'. Erwartet wie beim letzten Workshop: 'Unter 1.999 €', '2.000 - 2.999 €', '3.000 - 3.999 €', '4.000 - 4.999 €', 'Über 5.000 €'. Aus der Antwort wird der Mittelwert der Spanne gebildet ('3.000 - 3.999 €' -> 3.500); 'Unter X' und 'Über X' werden erkannt. Die Stufenwerte fallen direkt auf die Noten-Skala: 1.0 -> 100 = A, 0.4 -> 40 = C, 0.0 -> 0 = D.",
+    "_comment": "Monatliches Netto-Einkommen. Antwortoptionen: 'Unter 1.499 €', '1.500-2.499 €', '2.500-3.499 €', '3.500-4.999 €', 'Über 5.000 €'. Aus der Antwort wird der Mittelwert der Spanne gebildet ('2.500-3.499 €' -> 3.000), 'Unter X' und 'Über X' werden erkannt. Stufen auf der Noten-Skala: 1.0 -> 100 = A, 0.7 -> 70 = B, 0.4 -> 40 = C.",
     "tiers": [
-      { "atLeast": 3000, "score": 1.0 },
-      { "atLeast": 2000, "score": 0.4 },
-      { "atLeast": 0, "score": 0.0 }
+      { "atLeast": 2500, "score": 1.0 },
+      { "atLeast": 1500, "score": 0.7 },
+      { "atLeast": 0, "score": 0.4 }
     ]
   },
 
   "employment": {
-    "_comment": "Berufsbezeichnung. Bestätigte Option bisher: 'Selbstständig/Unternehmer'. Aktuell Gewicht 0 – Rentner/Schüler/Arbeitssuchend wirken stattdessen als Disqualifikation über 'rules'. Schlüssel werden case-insensitiv als Teilstring geprüft, der erste Treffer gewinnt.",
+    "_comment": "Berufsbezeichnung. Antwortoptionen: 'Angestellt', 'Selbstständig/Unternehmer', 'Elternzeit', 'Rentner', 'Arbeitssuchend'. Gewicht 0 – Rentner und Arbeitssuchend wirken als D über 'rules', der Rest zählt nicht in die Note. Schlüssel werden case-insensitiv als Teilstring geprüft, der erste Treffer gewinnt.",
     "scores": {
       "unternehmer": 1.0,
       "selbstständig": 0.9,
@@ -56,11 +47,11 @@
     "default": 0.5
   },
 
-  "_comment_tiers": "qualified: true = zählt in der Kachel 'Qualifizierte Leads' und in der Quali-Rate je Kampagne/Creative. Aktuell nur A, also Einkommen ab 3.000 €. B ist eine eigene Note für die Anrufreihenfolge, gilt aber nicht als qualifiziert.",
+  "_comment_tiers": "qualified: true = zählt in der Kachel 'Qualifizierte Leads' und in der Quali-Rate je Kampagne/Creative. Aktuell nur A, also Einkommen ab 2.500 €. B ist eine eigene Note für die Anrufreihenfolge, gilt aber nicht als qualifiziert.",
   "tiers": [
     { "key": "A", "label": "A · Top", "min": 75, "color": "#16a34a", "qualified": true },
     { "key": "B", "label": "B · Gut", "min": 55, "color": "#65a30d" },
-    { "key": "C", "label": "C · Mittel", "min": 35, "color": "#d97706" },
-    { "key": "D", "label": "D · Schwach", "min": 0, "color": "#dc2626" }
+    { "key": "C", "label": "C · Gering", "min": 35, "color": "#d97706" },
+    { "key": "D", "label": "D · Raus", "min": 0, "color": "#dc2626" }
   ]
 }

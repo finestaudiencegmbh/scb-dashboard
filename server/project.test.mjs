@@ -41,7 +41,7 @@ const umfrageSheet = {
     ['Eingetragen am', 'Vorname', 'Nachname', 'E-Mail', 'Telefonnummer', 'Berufsbezeichnung', 'Wieso würdest du gern online Geld verdienen?', 'Was sind deine größten Ziele?', 'Monatliches Einkommen', 'Wie würde sich dein Leben verändern, wenn du ortsunabhängig und online Geld verdienst?', 'Was erhoffst du dir vom Live-Webinar?', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ad_id'],
     ['2', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
     ['2026-10-20 12:01:00', 'Lara', 'Sommer', 'lara@example.com', '+4917300000', 'Selbstständig/Unternehmer', 'Freiheit', 'Eigenes Business', 'Über 5.000 €', 'Mehr Zeit', 'Klarheit', ADSET, 'Frau Müller', CAMPAIGN, '', 'Instagram_Reels', '120200000000000001'],
-    ['2026-10-20 15:30:00', 'Kim', 'Berg', 'kim@example.com', '+4917300001', 'Angestellt', 'Nebeneinkommen', 'Schulden weg', '2.000 - 2.999 €', 'Weniger Druck', 'Ideen', 'email', 'email', 'webinar-2026-11-01', 'mail', '', ''],
+    ['2026-10-20 15:30:00', 'Kim', 'Berg', 'kim@example.com', '+4917300001', 'Angestellt', 'Nebeneinkommen', 'Schulden weg', '1.500-2.499 €', 'Weniger Druck', 'Ideen', 'email', 'email', 'webinar-2026-11-01', 'mail', '', ''],
   ],
 };
 
@@ -114,33 +114,40 @@ const laraTicket = byMail(ticketRows, 'lara@example.com');
 assert.equal(laraTicket.ticketCreative, 'Frau Müller | v2', 'VIP-Ticket zählt bei derselben Meta-Anzeige');
 assert.equal(byMail(leadRows, 'naomi@example.com').creative, 'Frau Müller', 'ohne Ad-ID bleibt die UTM-Zuordnung');
 
-// --- Vorläufige Einstufung ---------------------------------------------------
-//   ab 3.000 €                                        -> A
-//   2.000 - 2.999 € und selbstständig/Unternehmer     -> B
-//   2.000 - 2.999 € sonst                             -> C
-//   unter 2.000 €                                     -> D
-//   Rentner/Schüler/Arbeitssuchend                    -> D (schlägt alles)
+// --- Einstufung (echte Antwortoptionen der Umfrage) --------------------------
+//   ab 2.500 €                     -> A
+//   1.500 - 2.499 €                -> B
+//   unter 1.500 €                  -> C
+//   Rentner oder Arbeitssuchend    -> D (schlägt jedes Einkommen)
 const tierOf = (answers) => computeQuality(answers, scoring)?.tier ?? null;
+const scoreOf = (answers) => computeQuality(answers, scoring)?.score ?? null;
 assert.equal(laraTicket.quality.tier, 'A', 'Über 5.000 € -> A');
-assert.equal(byMail(ticketRows, 'kim@example.com').quality.tier, 'C', '2.000–2.999 € angestellt -> C');
+assert.equal(byMail(ticketRows, 'kim@example.com').quality.tier, 'B', '1.500–2.499 € -> B');
 
-const INCOMES = ['Unter 1.999 €', '2.000 - 2.999 €', '3.000 - 3.999 €', '4.000 - 4.999 €', 'Über 5.000 €'];
-const MITTELFELD = '2.000 - 2.999 €';
-for (const income of INCOMES) {
-  for (const employment of ['Angestellt', 'Selbstständig/Unternehmer']) {
-    const want = income === MITTELFELD
-      ? (employment.startsWith('Selbst') ? 'B' : 'C')
-      : income === 'Unter 1.999 €' ? 'D' : 'A';
+const EXPECTED = {
+  'Unter 1.499 €': 'C',
+  '1.500-2.499 €': 'B',
+  '2.500-3.499 €': 'A',
+  '3.500-4.999 €': 'A',
+  'Über 5.000 €': 'A',
+};
+for (const [income, want] of Object.entries(EXPECTED)) {
+  for (const employment of ['Angestellt', 'Selbstständig/Unternehmer', 'Elternzeit']) {
     assert.equal(tierOf({ income, employment }), want, `${income} / ${employment} -> ${want}`);
   }
-  for (const employment of ['Rentner', 'Schüler/Student', 'Arbeitssuchend']) {
-    assert.equal(tierOf({ income, employment }), 'D', `${employment} -> immer D`);
+  for (const employment of ['Rentner', 'Arbeitssuchend']) {
+    assert.equal(tierOf({ income, employment }), 'D', `${income} / ${employment} -> immer D`);
+    assert.equal(scoreOf({ income, employment }), 0, `${employment} = 0 %`);
   }
 }
+assert.equal(tierOf({ employment: 'Rentner' }), 'D', 'Rentner auch ohne Einkommens-Angabe -> D');
+assert.equal(scoreOf({ income: 'Über 5.000 €', employment: 'Angestellt' }), 100, 'A = 100 %');
+assert.equal(scoreOf({ income: '1.500-2.499 €', employment: 'Angestellt' }), 70, 'B = 70 %');
+assert.equal(scoreOf({ income: 'Unter 1.499 €', employment: 'Angestellt' }), 40, 'C = 40 %');
 assert.deepEqual(qualifiedTiersOf(scoring), ['A'], 'nur A gilt als qualifiziert');
 assert.equal(computeQuality({ goals: 'Eigenes Business' }, scoring), null, 'ohne Einkommen keine Note');
 
 console.log('✓ Projekt-Konfiguration passt zum Sheet');
 console.log(`  ${PROJECT.name} | Ticket-Begriff: ${PROJECT.labels.ticket.many} | Leads: ${ds.counts.leads}, Tickets: ${ds.counts.tickets}`);
 console.log('  UTM-Schema: source = Anzeigengruppe · medium = Creative · campaign = Kampagne · term = Placement · ad_id gewinnt');
-console.log('  Vorläufige Einstufung: ab 3.000 € -> A · Mittelfeld + selbstständig -> B · Mittelfeld -> C · darunter/Rentner -> D');
+console.log('  Einstufung: ab 2.500 € -> A · 1.500–2.499 € -> B · unter 1.500 € -> C · Rentner/Arbeitssuchend -> D');
