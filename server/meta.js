@@ -343,10 +343,12 @@ export async function fetchMetaAll(customRange) {
   // Status-Maps mergen
   const campaignStatus = {}, adsetStatus = {}, adStatus = {}, adList = [];
   for (const a of perAccount) {
-    Object.assign(campaignStatus, a.status.campaignStatus || {});
-    Object.assign(adsetStatus, a.status.adsetStatus || {});
-    Object.assign(adStatus, a.status.adStatus || {});
-    if (a.status.adList) adList.push(...a.status.adList);
+    // Gleichnamige Einträge in mehreren Konten: aktiv gewinnt. Sonst würde das
+    // zuletzt geladene Konto (z. B. pausiert) eine laufende Kampagne überdecken.
+    mergeStatus(campaignStatus, a.status.campaignStatus);
+    mergeStatus(adsetStatus, a.status.adsetStatus);
+    mergeStatus(adStatus, a.status.adStatus);
+    if (a.status.adList) adList.push(...a.status.adList.map((x) => ({ ...x, account: a.account })));
   }
 
   const accounts = perAccount.map((a) => ({ id: a.account, name: a.name }));
@@ -358,10 +360,19 @@ export async function fetchMetaAll(customRange) {
   };
 }
 
+/** Status-Map zusammenführen; bei gleichem Namen gewinnt der aktive Eintrag. */
+function mergeStatus(target, source = {}) {
+  for (const [name, st] of Object.entries(source || {})) {
+    const prev = target[name];
+    if (!prev || (!prev.active && st.active)) target[name] = st;
+  }
+  return target;
+}
+
 /** Rückwärtskompatibel: nur die Placement-Records (für aggregateFb). */
 export async function fetchMetaInsights() {
   const all = await fetchMetaAll();
   return all ? all.records : null;
 }
 
-export const _internal = { normAccount, positionLabel, actionSum };
+export const _internal = { normAccount, positionLabel, actionSum, mergeStatus };

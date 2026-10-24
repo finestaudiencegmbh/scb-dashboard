@@ -98,6 +98,37 @@ assert.equal(adsetRows.length, 2, 'zwei Zeilen');
 assert.deepEqual(adsetRows.map((r) => r.leads).sort(), [1, 1], 'je ein Lead pro Kampagne');
 assert.deepEqual(adsetRows.map((r) => r.spend).sort((a, b) => a - b), [50, 200], 'Spend getrennt');
 
+// --- 4) Zwei Werbekonten mit identischen Namen -----------------------------
+// Dieselbe Kampagne/Anzeigengruppe/Anzeige läuft in Konto A (300 €) und B
+// (100 €). Die 4 Leads hängen am Namen: sie dürfen nur EINMAL zählen.
+{
+  const twin = (account, adId, spend) => ({ account, campaignId: `c-${account}`, campaign: 'SCB | Webinar', adsetId: `as-${account}`, adset: 'Broad', adId, creative: 'Reel 1', spend, impressions: 10000, clicks: 100, uniqueOutboundClicks: 50 });
+  const meta2 = {
+    entities: [twin('act_A', 'a1', 300), twin('act_B', 'b1', 100)],
+    adList: [
+      { id: 'a1', name: 'Reel 1', adset: 'Broad', campaign: 'SCB | Webinar', active: true, account: 'act_A' },
+      { id: 'b1', name: 'Reel 1', adset: 'Broad', campaign: 'SCB | Webinar', active: true, account: 'act_B' },
+    ],
+    daily: [],
+    campaignStatus: { 'SCB | Webinar': { status: 'ACTIVE', active: true, objective: 'OUTCOME_LEADS' } },
+    adsetStatus: { Broad: { status: 'ACTIVE', active: true } },
+  };
+  const four = Array.from({ length: 4 }, () => ({ isLead: true, sourceType: 'paid', campaign: 'SCB | Webinar', adset: 'Broad', creative: 'Reel 1', wonAt: '2026-10-20T10:00:00Z' }));
+  const res = combineMetaWithLeads(meta2, four);
+  assert.equal(res.hierarchy.length, 1, 'eine Kampagne, nicht zwei');
+  const c = res.hierarchy[0];
+  assert.equal(c.spend, 400, 'Spend beider Konten summiert');
+  assert.equal(c.leads, 4, 'Leads einmal gezählt');
+  assert.deepEqual(c.accounts, [{ id: 'act_A', spend: 300 }, { id: 'act_B', spend: 100 }], 'Spend je Konto');
+  const ads = c.adsets[0].ads;
+  assert.equal(ads.length, 1, 'gleiche Anzeige in zwei Konten = eine Zeile');
+  assert.equal(ads[0].leads, 4, 'keine Doppelzählung auf Anzeigenebene');
+  assert.equal(ads[0].spend, 400);
+  assert.equal(ads[0].cpl, 100, '400 € / 4 Leads');
+  assert.equal(res.totals.leads, 4, 'Gesamtsumme bleibt 4');
+}
+
 console.log('✓ Alle Attributions-Tests bestanden');
 console.log('  Gleicher Creative-Name in zwei Anzeigengruppen: 300 € / 1 Lead und 100 € / 3 Leads bleiben getrennt');
 console.log('  Gleiche Anzeigengruppe in zwei Kampagnen: bleibt getrennt');
+console.log('  Gleiche Namen in zwei Werbekonten: eine Zeile, Spend summiert, Leads einmal');

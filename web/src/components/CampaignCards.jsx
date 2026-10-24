@@ -212,6 +212,14 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                 <span className="cc-head-spend">{fmtEur(c.spend)}</span>
                 {hasGraph('campaign', { campaign: c.name }) && <GraphBtn onClick={() => openGraph('campaign', { campaign: c.name }, c.name)} />}
               </div>
+              {c.accounts?.length > 1 && (
+                <div className="cc-acc-split">
+                  {c.accounts.map((x) => (
+                    <span key={x.id} className="cc-acc-item"><span className="cc-acc-name">{accName(x.id)}</span> {fmtEur(x.spend)}</span>
+                  ))}
+                  <span className="cc-acc-hint">Leads gemeinsam, da gleiche Namen in beiden Konten</span>
+                </div>
+              )}
               <Metrics n={c} leadHidden={leadHidden} />
 
               {cOpen && (
@@ -268,15 +276,26 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
           );
   };
 
-  // Mehrere Werbekonten -> nach Account gruppieren (mit Überschrift); sonst flach
+  // Mehrere Werbekonten -> nach Account gruppieren (mit Überschrift); sonst flach.
+  // Gleichnamige Kampagnen in mehreren Konten sind EINE Karte (Leads hängen am
+  // Namen) und stehen in einer eigenen Gruppe "Konto A + Konto B".
   const accountList = accounts && accounts.length > 1 ? accounts : null;
+  const accName = (id) => accountList?.find((a) => a.id === id)?.name || id;
+  const accIds = (c) => (c.accounts?.length ? c.accounts.map((x) => x.id) : [c.account]);
   let body;
   if (accountList) {
     const known = new Set(accountList.map((a) => a.id));
     const groups = accountList
-      .map((acc) => ({ acc, items: campaigns.filter((c) => c.account === acc.id) }))
+      .map((acc) => ({ acc, items: campaigns.filter((c) => accIds(c).length === 1 && accIds(c)[0] === acc.id) }))
       .filter((g) => g.items.length > 0);
-    const rest = campaigns.filter((c) => !known.has(c.account));
+    const shared = new Map();
+    for (const c of campaigns.filter((x) => accIds(x).length > 1)) {
+      const key = [...accIds(c)].sort().join('+');
+      if (!shared.has(key)) shared.set(key, { acc: { id: key, name: [...accIds(c)].sort().map(accName).join(' + ') }, items: [] });
+      shared.get(key).items.push(c);
+    }
+    groups.unshift(...shared.values());
+    const rest = campaigns.filter((c) => accIds(c).length === 1 && !known.has(accIds(c)[0]));
     if (rest.length) groups.push({ acc: { id: '_rest', name: 'Weitere Konten' }, items: rest });
     body = groups.map((g) => (
       <div key={g.acc.id} className="cc-account-group">

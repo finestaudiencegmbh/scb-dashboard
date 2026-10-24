@@ -22,7 +22,10 @@ export default function DataSources({ data }) {
     rows.push({ key: 'meta', state: 'err', label: 'Meta', hint: fb.error });
   } else {
     const campaignsByAccount = new Map();
-    for (const c of fb.hierarchy || []) campaignsByAccount.set(c.account, (campaignsByAccount.get(c.account) || 0) + 1);
+    for (const c of fb.hierarchy || []) {
+      const ids = c.accounts?.length ? c.accounts.map((x) => x.id) : [c.account];
+      for (const id of ids) campaignsByAccount.set(id, (campaignsByAccount.get(id) || 0) + 1);
+    }
     for (const acc of fb.accounts || []) {
       const n = campaignsByAccount.get(acc.id) || 0;
       rows.push({

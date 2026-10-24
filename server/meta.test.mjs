@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { _internal, accountTargets } from './meta.js';
 import { aggregateFb } from './supermetrics.js';
 
-const { normAccount, positionLabel } = _internal;
+const { normAccount, positionLabel, mergeStatus } = _internal;
 
 assert.equal(normAccount('367913946654819'), 'act_367913946654819', 'act_ wird ergänzt');
 assert.equal(normAccount('act_367913946654819'), 'act_367913946654819', 'act_ bleibt erhalten');
@@ -48,6 +48,10 @@ assert.deepEqual(
   [{ account: 'act_5', token: 'T2' }],
   'nur das _2-Paar gesetzt reicht'
 );
+
+// Gleichnamiger Status aus zwei Konten: aktiv gewinnt, egal in welcher Reihenfolge
+assert.equal(mergeStatus(mergeStatus({}, { K: { active: true } }), { K: { active: false } }).K.active, true, 'aktiv bleibt');
+assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { active: true } }).K.active, true, 'aktiv überschreibt pausiert');
 
 console.log('✓ Alle Meta-Tests bestanden');
 console.log('  Gesamt-Spend:', agg.totals.spend, '€ | Placements:', Object.keys(agg.byDim.placement).join(', '));

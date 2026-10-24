@@ -67,6 +67,9 @@ function derive(m, features = {}) {
 
 const round2 = (n) => (n == null ? null : Math.round(n * 100) / 100);
 
+/** Map Konto -> Spend als Liste, größter Anteil zuerst: [{ id, spend }]. */
+const accountSplit = (m) => [...m.entries()].map(([id, spend]) => ({ id, spend: round2(spend) })).sort((x, y) => y.spend - x.spend);
+
 // Hierarchischer Attributions-Schlüssel, damit gleichnamige Anzeigengruppen/
 // Creatives in verschiedenen Kampagnen NICHT zusammengeworfen werden.
 //   campaign:  Kampagne
@@ -216,6 +219,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         objective,
         leadCampaign: isLeadCampaign(e.campaign, objective, campCfg),
         _m: emptyMetrics(),
+        _acc: new Map(), // Werbekonto -> Spend (gleichnamige Kampagne in mehreren Konten)
         adsets: new Map(),
       });
     }
@@ -229,27 +233,36 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         active: resolveActive(adsetStatus, haveAdsetStatus, e.adset),
         status: adsetStatus[e.adset]?.status ?? (haveAdsetStatus ? 'ARCHIVED' : null),
         _m: emptyMetrics(),
+        _acc: new Map(),
         ads: [],
+        _ads: new Map(), // Creative-Name -> Rohsummen (mehrere Konten = eine Zeile)
       });
     }
     const a = c.adsets.get(aKey);
 
     // Ad-Ebene: FB-Kennzahlen direkt, Leads/Tickets/Qualität über den vollen
-    // Pfad (Kampagne ▸ Anzeigengruppe ▸ Creative), nicht nur den Creative-Namen
-    const adLeads = lookupLeads('creative', { campaign: e.campaign, adset: e.adset, creative: e.creative });
-    const adM = {
-      spend: e.spend,
-      impressions: e.impressions,
-      clicks: e.clicks,
-      uoc: e.uniqueOutboundClicks,
-      leads: adLeads.leads,
-      tickets: adLeads.tickets,
-      scoreSum: adLeads.scoreSum,
-      scored: adLeads.scored,
-      qualified: adLeads.qualified,
-    };
-    const adActive = resolveAdActive(e.campaign, e.adset, e.creative);
-    a.ads.push({ id: e.adId, name: e.creative, level: 'ad', active: adActive, ...derive(adM, features) });
+    // Pfad (Kampagne ▸ Anzeigengruppe ▸ Creative), nicht nur den Creative-Namen.
+    // Dieselbe Anzeige (gleicher Pfad) in mehreren Werbekonten wird zu EINER
+    // Zeile summiert – die Leads hängen am Namen und dürfen nur einmal zählen.
+    const crKey = normKey(e.creative);
+    if (!a._ads.has(crKey)) {
+      const adLeads = lookupLeads('creative', { campaign: e.campaign, adset: e.adset, creative: e.creative });
+      a._ads.set(crKey, {
+        id: e.adId,
+        name: e.creative,
+        active: resolveAdActive(e.campaign, e.adset, e.creative),
+        m: { spend: 0, impressions: 0, clicks: 0, uoc: 0, leads: adLeads.leads, tickets: adLeads.tickets, scoreSum: adLeads.scoreSum, scored: adLeads.scored, qualified: adLeads.qualified },
+        acc: new Map(),
+      });
+    }
+    const adRaw = a._ads.get(crKey);
+    adRaw.m.spend += e.spend;
+    adRaw.m.impressions += e.impressions;
+    adRaw.m.clicks += e.clicks;
+    adRaw.m.uoc += e.uniqueOutboundClicks;
+    for (const acc of [adRaw.acc, a._acc, c._acc]) {
+      if (e.account) acc.set(e.account, (acc.get(e.account) || 0) + (e.spend || 0));
+    }
 
     // FB-Summen nach oben aggregieren
     for (const node of [a._m, c._m]) {
@@ -276,6 +289,9 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
     const adsets = [];
     for (const a of c.adsets.values()) {
       applyLeadStats(a._m, lookupLeads('adset', { campaign: c.name, adset: a.name }));
+      for (const r of a._ads.values()) {
+        a.ads.push({ id: r.id, name: r.name, level: 'ad', active: r.active, accounts: accountSplit(r.acc), ...derive(r.m, features) });
+      }
       // Anzeigen OHNE Auslieferung im Zeitraum ergänzen (keine Insights-Zeile),
       // damit ALLE Ads der Anzeigengruppe auffindbar sind – mit echtem Status
       // (aktiv/pausiert) und ggf. dennoch attribuierten Leads.
@@ -296,13 +312,13 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         a.ads.push({ id: `sheet:${ck}`, name: cname, level: 'ad', active: resolveAdActive(c.name, a.name, cname), ...derive(adM, features) });
       }
       adsets.push({
-        id: a.id, name: a.name, level: 'adset', active: a.active, status: a.status,
+        id: a.id, name: a.name, level: 'adset', active: a.active, status: a.status, accounts: accountSplit(a._acc),
         ...derive(a._m, features),
         ads: a.ads.sort((x, y) => y.spend - x.spend),
       });
     }
     result.push({
-      id: c.id, name: c.name, account: c.account, level: 'campaign', active: c.active, status: c.status,
+      id: c.id, name: c.name, account: c.account, accounts: accountSplit(c._acc), level: 'campaign', active: c.active, status: c.status,
       objective: c.objective, leadCampaign: c.leadCampaign,
       ...derive(c._m, features),
       adsets: adsets.sort((x, y) => y.spend - x.spend),
