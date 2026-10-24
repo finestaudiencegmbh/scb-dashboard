@@ -81,7 +81,7 @@ function StatusDot({ active }) {
 
 const LEVEL_LABEL = { campaign: 'Kampagne', adset: 'Anzeigengruppe', creative: 'Creative' };
 
-const campKey = (c) => String(c.id ?? c.name);
+const campKey = (c) => `${c.account || ''}|${c.id ?? c.name}`;
 
 /** Griff zum Verschieben (sechs Punkte). */
 function DragHandle({ onPointerDown }) {
@@ -210,16 +210,8 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                 <span className="cc-name" title={c.name}>{c.name}</span>
                 {leadHidden && <span className="traffic-tag">Traffic</span>}
                 <span className="cc-head-spend">{fmtEur(c.spend)}</span>
-                {hasGraph('campaign', { campaign: c.name }) && <GraphBtn onClick={() => openGraph('campaign', { campaign: c.name }, c.name)} />}
+                {hasGraph('campaign', { campaign: c.name, account: c.account }) && <GraphBtn onClick={() => openGraph('campaign', { campaign: c.name, account: c.account }, c.name)} />}
               </div>
-              {c.accounts?.length > 1 && (
-                <div className="cc-acc-split">
-                  {c.accounts.map((x) => (
-                    <span key={x.id} className="cc-acc-item"><span className="cc-acc-name">{accName(x.id)}</span> {fmtEur(x.spend)}</span>
-                  ))}
-                  <span className="cc-acc-hint">Leads gemeinsam, da gleiche Namen in beiden Konten</span>
-                </div>
-              )}
               <Metrics n={c} leadHidden={leadHidden} />
 
               {cOpen && (
@@ -240,7 +232,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                             <span className="cc-sm-item"><b>{leadHidden ? '–' : fmtEur(a.cpl)}</b> CPL</span>
                             {hasQuality && <span className="cc-sm-item"><b>{leadHidden ? '–' : fmtQuality(a.avgQuality)}</b> Quali</span>}
                           </span>
-                          {hasGraph('adset', { campaign: c.name, adset: a.name }) && <GraphBtn onClick={() => openGraph('adset', { campaign: c.name, adset: a.name }, a.name)} />}
+                          {hasGraph('adset', { campaign: c.name, adset: a.name, account: c.account }) && <GraphBtn onClick={() => openGraph('adset', { campaign: c.name, adset: a.name, account: c.account }, a.name)} />}
                         </div>
                         {aOpen && (
                           <div className="cc-sub-body">
@@ -257,7 +249,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                                       {ad.active != null && <span className={`status-dot ${ad.active ? 'on' : 'off'}`} />}
                                       <span className="cc-ad-label">{ad.name}</span>
                                       {ad.active === false && <span className="paused-tag">aus</span>}
-                                      {hasGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name }) && <GraphBtn compact onClick={() => openGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name }, ad.name)} />}
+                                      {hasGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }) && <GraphBtn compact onClick={() => openGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }, ad.name)} />}
                                     </span>
                                     {adCols.map((c) => <span key={c.label}>{c.value(ad, leadHidden)}</span>)}
                                   </div>
@@ -276,26 +268,17 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
           );
   };
 
-  // Mehrere Werbekonten -> nach Account gruppieren (mit Überschrift); sonst flach.
-  // Gleichnamige Kampagnen in mehreren Konten sind EINE Karte (Leads hängen am
-  // Namen) und stehen in einer eigenen Gruppe "Konto A + Konto B".
+  // Mehrere Werbekonten -> je Konto eine eigene Gruppe mit eigenen KPIs. Der
+  // Server rechnet jedes Konto getrennt (server/accounts.js); gleichnamige
+  // Kampagnen erscheinen deshalb in jedem Konto mit ihren eigenen Zahlen.
   const accountList = accounts && accounts.length > 1 ? accounts : null;
-  const accName = (id) => accountList?.find((a) => a.id === id)?.name || id;
-  const accIds = (c) => (c.accounts?.length ? c.accounts.map((x) => x.id) : [c.account]);
   let body;
   if (accountList) {
     const known = new Set(accountList.map((a) => a.id));
     const groups = accountList
-      .map((acc) => ({ acc, items: campaigns.filter((c) => accIds(c).length === 1 && accIds(c)[0] === acc.id) }))
+      .map((acc) => ({ acc, items: campaigns.filter((c) => c.account === acc.id) }))
       .filter((g) => g.items.length > 0);
-    const shared = new Map();
-    for (const c of campaigns.filter((x) => accIds(x).length > 1)) {
-      const key = [...accIds(c)].sort().join('+');
-      if (!shared.has(key)) shared.set(key, { acc: { id: key, name: [...accIds(c)].sort().map(accName).join(' + ') }, items: [] });
-      shared.get(key).items.push(c);
-    }
-    groups.unshift(...shared.values());
-    const rest = campaigns.filter((c) => accIds(c).length === 1 && !known.has(accIds(c)[0]));
+    const rest = campaigns.filter((c) => !known.has(c.account));
     if (rest.length) groups.push({ acc: { id: '_rest', name: 'Weitere Konten' }, items: rest });
     body = groups.map((g) => (
       <div key={g.acc.id} className="cc-account-group">

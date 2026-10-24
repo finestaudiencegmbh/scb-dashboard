@@ -16,13 +16,13 @@ export function adIndexFromMeta(meta) {
   const index = new Map();
   for (const ad of meta?.adList || []) {
     if (ad.id && ad.campaign && ad.adset && ad.name) {
-      index.set(String(ad.id), { campaign: ad.campaign, adset: ad.adset, creative: ad.name });
+      index.set(String(ad.id), { campaign: ad.campaign, adset: ad.adset, creative: ad.name, account: ad.account || null });
     }
   }
   // Insights zuletzt: das sind die Namen, unter denen combine.js den Spend führt.
   for (const e of meta?.entities || []) {
     if (e.adId && e.campaign && e.adset && e.creative) {
-      index.set(String(e.adId), { campaign: e.campaign, adset: e.adset, creative: e.creative });
+      index.set(String(e.adId), { campaign: e.campaign, adset: e.adset, creative: e.creative, account: e.account || null });
     }
   }
   return index;
@@ -46,6 +46,7 @@ export function resolveAdIds(records, meta) {
         r.campaign = hit.campaign;
         r.adset = hit.adset;
         r.creative = hit.creative;
+        r.adAccount = hit.account; // Werbekonto, aus dem die Anzeige stammt
         r.sourceType = 'paid';
         delete r.organicCampaign;
         delete r.organicAdset;
@@ -60,6 +61,7 @@ export function resolveAdIds(records, meta) {
         r.ticketCampaign = hit.campaign;
         r.ticketAdset = hit.adset;
         r.ticketCreative = hit.creative;
+        r.ticketAdAccount = hit.account;
       }
     }
   }

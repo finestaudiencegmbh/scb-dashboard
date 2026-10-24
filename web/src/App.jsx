@@ -231,6 +231,12 @@ export default function App() {
               hasFb && fb.hierarchy ? (
                 <section className="panel">
                   <div className="panel-head"><div><h2>Kampagnen-Aufschlüsselung</h2><span className="panel-sub">Kampagne → Anzeigengruppe → Creative · Facebook-Kennzahlen + Lead-Attribution</span></div></div>
+                  {fb.unassigned && (
+                    <div className="error-banner warn">
+                      <strong>Nicht eindeutig zuordenbar:</strong> {fmtInt(fb.unassigned.leads)} Leads{hasTickets && fb.unassigned.tickets != null ? ` und ${fmtInt(fb.unassigned.tickets)} ${T.many}` : ''} gehören zu Kampagnen, die in mehreren Werbekonten gleich heißen, und haben keine Ad-ID. Sie fehlen bewusst in den Konto-KPIs, damit nichts vermischt wird.
+                      <div className="hint">{fb.unassigned.campaigns.map((c) => `${c.campaign} (${c.leads} Leads${hasTickets ? `, ${c.tickets} ${T.many}` : ''})`).join(' · ')}</div>
+                    </div>
+                  )}
                   <CampaignCards hierarchy={fb.hierarchy} dailyByEntity={fb.dailyByEntity} intradayByEntity={fb.intradayByEntity} intradayDay={fb.intradayDay} accounts={fb.accounts} />
                 </section>
               ) : (

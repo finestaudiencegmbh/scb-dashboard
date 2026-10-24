@@ -285,6 +285,15 @@ synthetischen Daten – gut zum Ansehen des Layouts vor dem echten Anschluss.
    `META_ACCESS_TOKEN_2` + `META_AD_ACCOUNT_ID_2` eintragen (weitere: `_3` bis
    `_9`).
 
+**Mehrere Konten werden nie vermischt.** Jedes Konto wird getrennt gerechnet
+(`server/accounts.js`) und steht in der Kampagnen-Ansicht als eigene Gruppe mit
+eigenen KPIs, auch wenn Kampagnen und Anzeigen in beiden Konten gleich heißen.
+Ein Lead gehört zu einem Konto über seine Ad-ID oder, ohne Ad-ID, über einen
+Namen, den es nur in einem Konto gibt. Leads ohne Ad-ID mit Namen, die in
+mehreren Konten vorkommen, zählen in keinem Konto und stehen als „Nicht
+eindeutig zuordenbar" über der Kampagnen-Ansicht. Deshalb gehört `ad_id={{ad.id}}`
+bei mehreren Konten zwingend in die URL-Parameter.
+
 Fällt ein Konto aus (fehlende Rechte, abgelaufenes Token, Tippfehler in der
 ID), laufen die übrigen weiter. Unten in der Sidebar unter „Datenquellen" steht
 jedes Konto mit Punkt: grün = liefert Daten, gelb = verbunden, aber im Zeitraum

@@ -308,7 +308,12 @@ export async function fetchMetaAll(customRange) {
           fetchAccountName(c).catch(() => account),
         ]);
         // Entities mit ihrem Werbekonto markieren (für die optische Trennung)
-        return { account, name, records, entities: entities.map((e) => ({ ...e, account })), daily, dailyEntities, status };
+        return {
+          account, name, records, daily, status,
+          entities: entities.map((e) => ({ ...e, account })),
+          dailyEntities: dailyEntities.map((e) => ({ ...e, account })),
+          adList: (status.adList || []).map((x) => ({ ...x, account })),
+        };
       } catch (err) {
         console.error(`Meta-Konto ${account} konnte nicht geladen werden:`, err.message);
         accountErrors.push(`${account}: ${err.message}`);
@@ -348,12 +353,17 @@ export async function fetchMetaAll(customRange) {
     mergeStatus(campaignStatus, a.status.campaignStatus);
     mergeStatus(adsetStatus, a.status.adsetStatus);
     mergeStatus(adStatus, a.status.adStatus);
-    if (a.status.adList) adList.push(...a.status.adList.map((x) => ({ ...x, account: a.account })));
+    adList.push(...a.adList);
   }
 
   const accounts = perAccount.map((a) => ({ id: a.account, name: a.name }));
   return {
     records, entities, daily, dailyEntities, campaignStatus, adsetStatus, adStatus, adList, range, accounts,
+    // Je Konto getrennt – für die Konto-saubere Auswertung (server/accounts.js)
+    byAccount: perAccount.map((a) => ({
+      account: a.account, name: a.name, entities: a.entities, dailyEntities: a.dailyEntities, daily: a.daily, adList: a.adList,
+      campaignStatus: a.status.campaignStatus || {}, adsetStatus: a.status.adsetStatus || {}, adStatus: a.status.adStatus || {},
+    })),
     // Diagnose: wie viele Konten waren angefragt, welche scheiterten?
     accountsRequested: targets.length,
     accountErrors,

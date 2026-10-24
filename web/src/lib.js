@@ -104,12 +104,15 @@ export const normKey = (s) =>
 // Hierarchischer Schlüssel (muss mit server/combine.js pathKey übereinstimmen):
 // campaign / Kampagne▸Anzeigengruppe / Kampagne▸Anzeigengruppe▸Creative.
 const PATH_SEP = '';
-export function entityKey(dim, { campaign, adset, creative } = {}) {
+export function entityKey(dim, { campaign, adset, creative, account } = {}) {
+  // Bei Meta-Daten trägt der Schlüssel das Werbekonto (server/accounts.js),
+  // damit gleichnamige Kampagnen verschiedener Konten getrennt bleiben.
+  const pre = account ? `${account}::` : '';
   const c = normKey(campaign);
-  if (dim === 'campaign') return c;
+  if (dim === 'campaign') return pre + c;
   const a = normKey(adset);
-  if (dim === 'adset') return `${c}${PATH_SEP}${a}`;
-  return `${c}${PATH_SEP}${a}${PATH_SEP}${normKey(creative)}`;
+  if (dim === 'adset') return `${pre}${c}${PATH_SEP}${a}`;
+  return `${pre}${c}${PATH_SEP}${a}${PATH_SEP}${normKey(creative)}`;
 }
 
 function spendForAdsets(adsetNames, overviewByAdset) {

@@ -11,8 +11,8 @@ import { loadScoringConfig, qualifiedTiersOf } from './scoring.js';
 import { getSampleParsed } from './sample-data.js';
 import { isSupermetricsConfigured, fetchFbInsights, aggregateFb } from './supermetrics.js';
 import { isMetaConfigured, fetchMetaAll } from './meta.js';
-import { combineMetaWithLeads } from './combine.js';
 import { resolveAdIds } from './adid.js';
+import { combineByAccount } from './accounts.js';
 import { isChatConfigured, buildContext, chat } from './chat.js';
 import { loadProjectConfig, publicProjectConfig } from './project.js';
 
@@ -89,8 +89,9 @@ async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
       const leadsInRange = filterLeadsByRange(dataset.leads, from, to);
       // Stunden-Raster, wenn genau ein Tag gewählt ist
       const hourlyDay = from && to && from === to ? from : null;
-      const combined = combineMetaWithLeads(all, leadsInRange, { hourlyDay, features, qualifiedTiers });
-      fb = { configured: true, provider: 'meta', error: null, fetchedAt: new Date().toISOString(), ...agg, hierarchy: combined.hierarchy, daily: combined.daily, totals: combined.totals, nonLeadCampaigns: combined.nonLeadCampaigns, uocByDim: combined.uocByDim, dimMeta: combined.dimMeta, dailyByEntity: combined.dailyByEntity, intradayByEntity: combined.intradayByEntity, intradayDay: combined.intradayDay, accounts: all.accounts, adIds, accountsRequested: all.accountsRequested, accountErrors: all.accountErrors };
+      // Jedes Werbekonto getrennt rechnen – nichts wird zwischen Konten vermischt
+      const combined = combineByAccount(all, leadsInRange, { hourlyDay, features, qualifiedTiers });
+      fb = { configured: true, provider: 'meta', error: null, fetchedAt: new Date().toISOString(), ...agg, hierarchy: combined.hierarchy, daily: combined.daily, totals: combined.totals, nonLeadCampaigns: combined.nonLeadCampaigns, uocByDim: combined.uocByDim, dimMeta: combined.dimMeta, dailyByEntity: combined.dailyByEntity, intradayByEntity: combined.intradayByEntity, intradayDay: combined.intradayDay, accounts: all.accounts, adIds, unassigned: combined.unassigned, accountsRequested: all.accountsRequested, accountErrors: all.accountErrors };
     } catch (err) {
       console.error('Meta-Fehler:', err.message);
       fb.error = err.message;
