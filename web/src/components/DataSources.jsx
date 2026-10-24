@@ -26,13 +26,16 @@ export default function DataSources({ data }) {
       const ids = c.accounts?.length ? c.accounts.map((x) => x.id) : [c.account];
       for (const id of ids) campaignsByAccount.set(id, (campaignsByAccount.get(id) || 0) + 1);
     }
+    const warnOf = (id) => (fb.accountWarnings || []).filter((w) => w.startsWith(`${id}:`)).map((w) => w.slice(id.length + 1).trim());
     for (const acc of fb.accounts || []) {
       const n = campaignsByAccount.get(acc.id) || 0;
+      const warns = warnOf(acc.id);
       rows.push({
         key: acc.id,
-        state: n ? 'ok' : 'idle',
+        // gelb auch dann, wenn das Konto lädt, aber ein Teil der Daten fehlt
+        state: n && !warns.length ? 'ok' : 'idle',
         label: acc.name && acc.name !== acc.id ? acc.name : acc.id,
-        hint: n ? `${acc.id} · ${n} Kampagnen im Zeitraum` : `${acc.id} · verbunden, im Zeitraum keine Kampagnen`,
+        hint: [n ? `${acc.id} · ${n} Kampagnen im Zeitraum` : `${acc.id} · verbunden, im Zeitraum keine Kampagnen`, ...warns].join(' · '),
       });
     }
     // accountErrors: "act_123: Grund"

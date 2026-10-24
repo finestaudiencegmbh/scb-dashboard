@@ -91,7 +91,7 @@ async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
       const hourlyDay = from && to && from === to ? from : null;
       // Jedes Werbekonto getrennt rechnen – nichts wird zwischen Konten vermischt
       const combined = combineByAccount(all, leadsInRange, { hourlyDay, features, qualifiedTiers });
-      fb = { configured: true, provider: 'meta', error: null, fetchedAt: new Date().toISOString(), ...agg, hierarchy: combined.hierarchy, daily: combined.daily, totals: combined.totals, nonLeadCampaigns: combined.nonLeadCampaigns, uocByDim: combined.uocByDim, dimMeta: combined.dimMeta, dailyByEntity: combined.dailyByEntity, intradayByEntity: combined.intradayByEntity, intradayDay: combined.intradayDay, accounts: all.accounts, adIds, unassigned: combined.unassigned, accountsRequested: all.accountsRequested, accountErrors: all.accountErrors };
+      fb = { configured: true, provider: 'meta', error: null, fetchedAt: new Date().toISOString(), ...agg, hierarchy: combined.hierarchy, daily: combined.daily, totals: combined.totals, nonLeadCampaigns: combined.nonLeadCampaigns, uocByDim: combined.uocByDim, dimMeta: combined.dimMeta, dailyByEntity: combined.dailyByEntity, intradayByEntity: combined.intradayByEntity, intradayDay: combined.intradayDay, accounts: all.accounts, adIds, unassigned: combined.unassigned, accountsRequested: all.accountsRequested, accountErrors: all.accountErrors, accountWarnings: all.accountWarnings };
     } catch (err) {
       console.error('Meta-Fehler:', err.message);
       fb.error = err.message;

@@ -100,11 +100,15 @@ const RATE_LIMIT_CODES = new Set([1, 2, 4, 17, 613, 80000, 80004]);
 
 /** Generischer paginierter GET gegen die Graph API, mit Retry bei Rate-Limit
  * UND bei Netzwerkfehlern ("fetch failed", Verbindungsabbruch, Timeout). */
+// Seiten-Obergrenze je Abruf (à 500 Zeilen). Wird sie erreicht, ist die Liste
+// unvollständig – das wird als Fehler gemeldet statt still abgeschnitten.
+const MAX_PAGES = 400;
+
 async function graphGet(url) {
   const out = [];
   let next = url;
   let guard = 0;
-  while (next && guard < 60) {
+  while (next && guard < MAX_PAGES) {
     guard += 1;
     let json = null;
     // bis zu 4 Versuche – bei Rate-Limit (Code 4 etc.) UND bei Netzwerkfehlern,
@@ -131,6 +135,7 @@ async function graphGet(url) {
     for (const row of json.data || []) out.push(row);
     next = json.paging?.next || null;
   }
+  if (next) throw new Error(`Meta: mehr als ${MAX_PAGES * 500} Zeilen – Zeitraum verkleinern`);
   return out;
 }
 
@@ -295,6 +300,7 @@ export async function fetchMetaAll(customRange) {
   // Pro Konto alles parallel holen. Schlägt EIN Konto fehl, wird es übersprungen
   // (Warnung im Log), damit die übrigen Konten trotzdem angezeigt werden.
   const accountErrors = [];
+  const accountWarnings = [];
   const perAccount = (await Promise.all(
     targets.map(async ({ account, token }) => {
       try {
@@ -303,7 +309,14 @@ export async function fetchMetaAll(customRange) {
           fetchPlacementRecords(c, range),
           fetchEntities(c, range),
           fetchDaily(c, range),
-          fetchDailyEntities(c, range).catch(() => []),
+          // Optional für die Grafik je Kampagne/Anzeige. Scheitert der Abruf, läuft
+          // der Rest weiter – der Grund wird aber gemeldet (accountWarnings),
+          // sonst zeigt die Grafik stillschweigend 0 € Spend.
+          fetchDailyEntities(c, range).catch((err) => {
+            console.error(`Meta-Konto ${account}: Tagesdaten je Anzeige fehlen:`, err.message);
+            accountWarnings.push(`${account}: Tagesdaten für die Grafik fehlen (${err.message})`);
+            return [];
+          }),
           fetchStatus(c).catch(() => ({ campaignStatus: {}, adsetStatus: {}, adStatus: {} })),
           fetchAccountName(c).catch(() => account),
         ]);
@@ -366,6 +379,7 @@ export async function fetchMetaAll(customRange) {
     })),
     // Diagnose: wie viele Konten waren angefragt, welche scheiterten?
     accountsRequested: targets.length,
+    accountWarnings,
     accountErrors,
   };
 }

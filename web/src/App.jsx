@@ -159,6 +159,12 @@ export default function App() {
               : 'Das Dashboard funktioniert weiter. Prüfe SUPERMETRICS_API_KEY und die Query.'}</div>
           </div>
         )}
+        {fb?.configured && !fb?.error && fb?.accountWarnings?.length > 0 && (
+          <div className="error-banner warn">
+            <strong>Facebook (Meta API):</strong> Ein Teil der Daten fehlt – Grafik-Werte wie CPL oder Spend pro Tag können leer sein.
+            <div className="hint">{fb.accountWarnings.join(' · ')}. Meist Rate-Limit oder sehr großer Zeitraum: kleineren Zeitraum wählen oder in 1–2 Min „Aktualisieren".</div>
+          </div>
+        )}
         {fb?.configured && !fb?.error && fb?.accountErrors?.length > 0 && (
           <div className="error-banner warn">
             <strong>Facebook (Meta API):</strong> Nur {fb.accounts?.length ?? 0} von {fb.accountsRequested ?? '?'} Werbekonten geladen – die Zahlen sind unvollständig.
