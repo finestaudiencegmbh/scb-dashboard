@@ -245,6 +245,35 @@ async function fetchDailyEntities(c, range) {
   }));
 }
 
+/**
+ * Ziel-URLs (Landingpages) je Anzeige aus dem Creative. Meta legt die URL je
+ * nach Anzeigentyp an verschiedenen Stellen ab (link_data, video_data.call_to_action,
+ * asset_feed_spec.link_urls, link_url …) – daher werden alle http(s)-Werte im
+ * Creative eingesammelt, ohne Bild-/Video-Adressen von Facebook/Instagram.
+ * Ergebnis: Map Ad-ID -> [URL, …]
+ */
+async function fetchAdUrls(c) {
+  const rows = await graphGet(
+    `${GRAPH}/${c.version}/${c.account}/ads?fields=id,creative{link_url,object_url,template_url,object_story_spec,asset_feed_spec}&limit=200&access_token=${c.token}`
+  );
+  const out = new Map();
+  for (const r of rows) out.set(String(r.id), collectUrls(r.creative));
+  return out;
+}
+
+const MEDIA_HOST = /(fbcdn\.net|facebook\.com|fb\.me|fb\.com|instagram\.com|cdninstagram\.com|whatsapp\.com)/i;
+export function collectUrls(node, found = new Set()) {
+  if (node == null) return [...found];
+  if (typeof node === 'string') {
+    if (/^https?:\/\//i.test(node) && !MEDIA_HOST.test(node)) found.add(node.trim());
+  } else if (Array.isArray(node)) {
+    for (const x of node) collectUrls(x, found);
+  } else if (typeof node === 'object') {
+    for (const v of Object.values(node)) collectUrls(v, found);
+  }
+  return [...found];
+}
+
 /** Anzeigename des Werbekontos (für die optische Trennung mehrerer Accounts). */
 async function fetchAccountName(c) {
   const url = `${GRAPH}/${c.version}/${c.account}?fields=name&access_token=${c.token}`;
@@ -305,7 +334,7 @@ export async function fetchMetaAll(customRange) {
     targets.map(async ({ account, token }) => {
       try {
         const c = { ...base, account, token };
-        const [records, entities, daily, dailyEntities, status, name] = await Promise.all([
+        const [records, entities, daily, dailyEntities, status, name, adUrls] = await Promise.all([
           fetchPlacementRecords(c, range),
           fetchEntities(c, range),
           fetchDaily(c, range),
@@ -319,13 +348,20 @@ export async function fetchMetaAll(customRange) {
           }),
           fetchStatus(c).catch(() => ({ campaignStatus: {}, adsetStatus: {}, adStatus: {} })),
           fetchAccountName(c).catch(() => account),
+          // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js)
+          fetchAdUrls(c).catch((err) => {
+            console.error(`Meta-Konto ${account}: Landingpages der Anzeigen nicht lesbar:`, err.message);
+            accountWarnings.push(`${account}: Landingpages der Anzeigen nicht lesbar (${err.message})`);
+            return null;
+          }),
         ]);
         // Entities mit ihrem Werbekonto markieren (für die optische Trennung)
         return {
           account, name, records, daily, status,
           entities: entities.map((e) => ({ ...e, account })),
           dailyEntities: dailyEntities.map((e) => ({ ...e, account })),
-          adList: (status.adList || []).map((x) => ({ ...x, account })),
+          adList: (status.adList || []).map((x) => ({ ...x, account, urls: adUrls ? (adUrls.get(String(x.id)) || []) : null })),
+          adUrls: adUrls ? Object.fromEntries(adUrls) : null, // Ad-ID -> [URL]
         };
       } catch (err) {
         console.error(`Meta-Konto ${account} konnte nicht geladen werden:`, err.message);
@@ -374,7 +410,8 @@ export async function fetchMetaAll(customRange) {
     records, entities, daily, dailyEntities, campaignStatus, adsetStatus, adStatus, adList, range, accounts,
     // Je Konto getrennt – für die Konto-saubere Auswertung (server/accounts.js)
     byAccount: perAccount.map((a) => ({
-      account: a.account, name: a.name, entities: a.entities, dailyEntities: a.dailyEntities, daily: a.daily, adList: a.adList,
+      account: a.account, name: a.name, entities: a.entities, dailyEntities: a.dailyEntities, daily: a.daily, adList: a.adList, adUrls: a.adUrls,
+      records: a.records.map((r) => ({ ...r, account: a.account })),
       campaignStatus: a.status.campaignStatus || {}, adsetStatus: a.status.adsetStatus || {}, adStatus: a.status.adStatus || {},
     })),
     // Diagnose: wie viele Konten waren angefragt, welche scheiterten?

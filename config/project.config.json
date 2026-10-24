@@ -13,6 +13,11 @@
     "background": "#0a0a0a",
     "logo": "/logo.png"
   },
+  "_comment_scope": "Projekt-Bereich: Welche Meta-Kampagnen zählen zu diesem Dashboard? landingPages = Teilstrings der Ziel-URL der Anzeigen; eine Kampagne gehört dazu, wenn mindestens eine Anzeige auf eine passende LP verlinkt. campaignNames = optional zusätzlich Teilstrings im Kampagnennamen. Alles andere (z. B. VSL-Kampagnen auf secretcreators.de) zählt NICHT in Adspend, CPL, Kosten/Ticket und Graphen und steht eingeklappt unter 'Nicht im Webinar'. Beide leer = alle Kampagnen zählen.",
+  "scope": {
+    "landingPages": ["secretbusiness.live"],
+    "campaignNames": []
+  },
   "_comment_features": "hasTickets: zweite Conversion-Stufe (hier: die ausgefüllte VIP-Umfrage = VIP-Ticket) vorhanden? false = alle Ticket-KPIs verschwinden. hasQuality: Fragebogen + Lead-Scoring vorhanden? false = Quali-Rate, Ø Quali, Tiers, Antworten-Details und Quali-Filter verschwinden. hasQuality setzt hasTickets voraus – die Fragebogen-Antworten stecken im Umfrage-Tab des Sheets.",
   "features": { "hasTickets": true, "hasQuality": true },
   "_comment_labels": "Wie die zweite Stufe im Dashboard heißt. one = Einzahl, many = Mehrzahl, short = Kürzel für Badges/Tabellenspalten.",

@@ -485,6 +485,16 @@ body {
 .cc-card.is-traffic { border-left-color: var(--cyan); }
 .cc-head { display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer; background: rgba(var(--accent-rgb), 0.06); border: none; padding: 15px 18px; color: var(--ink); text-align: left; }
 .cc-head:hover { background: var(--accent-soft); }
+
+/* ---- Kampagnen außerhalb des Projekt-Bereichs ---- */
+.scope-out { margin-top: 22px; border: 1px solid var(--line); border-radius: var(--radius-md); background: rgba(var(--deep-rgb), 0.35); }
+.scope-out summary { cursor: pointer; padding: 14px 18px; color: var(--ink-soft); font-size: 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.scope-hint { color: var(--faint); font-weight: 400; font-size: 12.5px; }
+.scope-out ul { list-style: none; margin: 0; padding: 0 18px 12px; }
+.scope-out li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; padding: 10px 0; border-top: 1px solid var(--line); }
+.scope-name { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.scope-meta { grid-column: 1; color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-spend { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--muted); font-weight: 600; font-size: 14px; }
 .cc-drag { display: inline-grid; place-items: center; width: 22px; height: 28px; margin: -4px 0 -4px -6px; color: var(--faint); cursor: grab; touch-action: none; border-radius: 6px; flex-shrink: 0; }
 .cc-drag:hover { color: var(--accent-ink); background: rgba(var(--accent-rgb), 0.1); }
 .cc-sorting, .cc-sorting * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }

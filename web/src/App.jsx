@@ -236,14 +236,36 @@ export default function App() {
             {view === 'campaigns' && (
               hasFb && fb.hierarchy ? (
                 <section className="panel">
-                  <div className="panel-head"><div><h2>Kampagnen-Aufschlüsselung</h2><span className="panel-sub">Kampagne → Anzeigengruppe → Creative · Facebook-Kennzahlen + Lead-Attribution</span></div></div>
+                  <div className="panel-head"><div><h2>Kampagnen-Aufschlüsselung</h2><span className="panel-sub">Kampagne → Anzeigengruppe → Creative · Facebook-Kennzahlen + Lead-Attribution{fb.scope?.active ? ` · nur Anzeigen auf ${(fb.scope.rules?.landingPages || []).join(', ')}` : ''}</span></div></div>
                   {fb.unassigned && (
                     <div className="error-banner warn">
                       <strong>Nicht eindeutig zuordenbar:</strong> {fmtInt(fb.unassigned.leads)} Leads{hasTickets && fb.unassigned.tickets != null ? ` und ${fmtInt(fb.unassigned.tickets)} ${T.many}` : ''} gehören zu Kampagnen, die in mehreren Werbekonten gleich heißen, und haben keine Ad-ID. Sie fehlen bewusst in den Konto-KPIs, damit nichts vermischt wird.
                       <div className="hint">{fb.unassigned.campaigns.map((c) => `${c.campaign} (${c.leads} Leads${hasTickets ? `, ${c.tickets} ${T.many}` : ''})`).join(' · ')}</div>
                     </div>
                   )}
+                  {fb.scope?.active && fb.scope.leadsOutside > 0 && (
+                    <div className="error-banner warn">
+                      <strong>Leads außerhalb des Bereichs:</strong> {fmtInt(fb.scope.leadsOutside)} Leads im Sheet stammen laut Ad-ID aus Kampagnen, deren Anzeigen nicht auf {(fb.scope.rules?.landingPages || []).join(', ')} verlinken. Ihr Spend zählt nicht mit – Landingpage der Anzeigen prüfen.
+                    </div>
+                  )}
                   <CampaignCards hierarchy={fb.hierarchy} dailyByEntity={fb.dailyByEntity} intradayByEntity={fb.intradayByEntity} intradayDay={fb.intradayDay} accounts={fb.accounts} />
+                  {fb.scope?.active && fb.scope.excluded.length > 0 && (
+                    <details className="scope-out">
+                      <summary>
+                        Nicht im Webinar: {fb.scope.excluded.length} Kampagnen · {fmtEur(fb.scope.excluded.reduce((sum, c) => sum + (c.spend || 0), 0))} Spend
+                        <span className="scope-hint">zählen nicht in Adspend, CPL und Graphen</span>
+                      </summary>
+                      <ul>
+                        {fb.scope.excluded.map((c) => (
+                          <li key={`${c.account}-${c.campaign}`}>
+                            <span className="scope-name" title={c.campaign}>{c.campaign}</span>
+                            <span className="scope-meta">{(fb.accounts || []).find((a) => a.id === c.account)?.name || c.account} · {c.reason}{c.urls[0] ? ` · ${c.urls[0].replace(/^https?:\/\//, '').split('?')[0]}` : ''}</span>
+                            <span className="scope-spend">{fmtEur(c.spend)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </section>
               ) : (
                 <section className="panel">

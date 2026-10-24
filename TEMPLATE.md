@@ -102,6 +102,26 @@ ohne ID oder mit einer ID, die Meta nicht liefert (anderes, nicht angebundenes
 Werbekonto), behalten ihre UTM-Zuordnung. Wie viele Zeilen aufgelöst wurden,
 steht in `/api/data` unter `fb.adIds`.
 
+### Projekt-Bereich: welche Kampagnen zählen?
+
+Laufen in den Werbekonten auch Kampagnen anderer Funnels (z. B. VSL), deren
+Leads nie im Sheet landen, würde ihr Spend Adspend, CPL und Kosten/Ticket
+verfälschen. `scope` legt fest, was zu diesem Dashboard gehört:
+
+```jsonc
+"scope": {
+  "landingPages": ["secretbusiness.live"],  // Ziel-URL der Anzeigen (Teilstring)
+  "campaignNames": []                       // optional: Teilstring im Kampagnennamen
+}
+```
+
+Eine Kampagne zählt, wenn mindestens eine Anzeige auf eine passende
+Landingpage verlinkt (die URL wird aus dem Creative in Meta gelesen) oder ihr
+Name passt. Alles andere zählt nirgends mit und steht eingeklappt unter
+„Nicht im Webinar" mit Spend und erkannter LP. Kann Meta die Landingpages
+eines Kontos nicht liefern, wird dort nichts gefiltert und eine Warnung
+angezeigt. Beide Listen leer = alle Kampagnen zählen.
+
 ### Bezahlt oder organisch?
 
 `config/campaigns.json` entscheidet in dieser Reihenfolge:

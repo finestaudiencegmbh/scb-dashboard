@@ -13,6 +13,7 @@ import { isSupermetricsConfigured, fetchFbInsights, aggregateFb } from './superm
 import { isMetaConfigured, fetchMetaAll } from './meta.js';
 import { resolveAdIds } from './adid.js';
 import { combineByAccount } from './accounts.js';
+import { applyScope } from './scope.js';
 import { isChatConfigured, buildContext, chat } from './chat.js';
 import { loadProjectConfig, publicProjectConfig } from './project.js';
 
@@ -81,17 +82,24 @@ async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
   if (metaOn) {
     try {
       const all = await fetchMetaAll(range);
-      const agg = aggregateFb(all.records);
       // Sheet-Zeilen mit Ad-ID exakt auf die Meta-Anzeige legen (vor dem
-      // Zeitraum-Filter, damit auch die Leadliste dieselben Namen zeigt)
+      // Zeitraum-Filter, damit auch die Leadliste dieselben Namen zeigt).
+      // Bewusst gegen ALLE Kampagnen, damit auch Leads aus Kampagnen außerhalb
+      // des Projekt-Bereichs erkannt und gemeldet werden.
       const adIds = resolveAdIds(dataset.leads, all);
+      // Projekt-Bereich: nur Kampagnen dieses Funnels zählen (Landingpage/Name)
+      const scoped = applyScope(all, PROJECT.scope);
+      const meta = scoped.meta;
+      const agg = aggregateFb(meta.records);
+      const excludedKeys = new Set(scoped.excluded.map((c) => `${c.account}::${c.campaign}`));
+      const leadsOutside = dataset.leads.filter((l) => l.isLead !== false && l.adAccount && excludedKeys.has(`${l.adAccount}::${l.campaign}`)).length;
       // Leads für denselben Zeitraum, damit FB-Hierarchie & Leads konsistent sind
       const leadsInRange = filterLeadsByRange(dataset.leads, from, to);
       // Stunden-Raster, wenn genau ein Tag gewählt ist
       const hourlyDay = from && to && from === to ? from : null;
       // Jedes Werbekonto getrennt rechnen – nichts wird zwischen Konten vermischt
-      const combined = combineByAccount(all, leadsInRange, { hourlyDay, features, qualifiedTiers });
-      fb = { configured: true, provider: 'meta', error: null, fetchedAt: new Date().toISOString(), ...agg, hierarchy: combined.hierarchy, daily: combined.daily, totals: combined.totals, nonLeadCampaigns: combined.nonLeadCampaigns, uocByDim: combined.uocByDim, dimMeta: combined.dimMeta, dailyByEntity: combined.dailyByEntity, intradayByEntity: combined.intradayByEntity, intradayDay: combined.intradayDay, accounts: all.accounts, adIds, unassigned: combined.unassigned, accountsRequested: all.accountsRequested, accountErrors: all.accountErrors, accountWarnings: all.accountWarnings };
+      const combined = combineByAccount(meta, leadsInRange, { hourlyDay, features, qualifiedTiers });
+      fb = { configured: true, provider: 'meta', error: null, fetchedAt: new Date().toISOString(), ...agg, hierarchy: combined.hierarchy, daily: combined.daily, totals: combined.totals, nonLeadCampaigns: combined.nonLeadCampaigns, uocByDim: combined.uocByDim, dimMeta: combined.dimMeta, dailyByEntity: combined.dailyByEntity, intradayByEntity: combined.intradayByEntity, intradayDay: combined.intradayDay, accounts: all.accounts, adIds, unassigned: combined.unassigned, accountsRequested: all.accountsRequested, accountErrors: all.accountErrors, accountWarnings: all.accountWarnings, scope: { active: scoped.active, rules: PROJECT.scope || null, excluded: scoped.excluded, leadsOutside } };
     } catch (err) {
       console.error('Meta-Fehler:', err.message);
       fb.error = err.message;
