@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { _internal, accountTargets } from './meta.js';
 import { aggregateFb } from './supermetrics.js';
 
-const { normAccount, positionLabel, mergeStatus } = _internal;
+const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache } = _internal;
 
 assert.equal(normAccount('367913946654819'), 'act_367913946654819', 'act_ wird ergänzt');
 assert.equal(normAccount('act_367913946654819'), 'act_367913946654819', 'act_ bleibt erhalten');
@@ -52,6 +52,36 @@ assert.deepEqual(
 // Gleichnamiger Status aus zwei Konten: aktiv gewinnt, egal in welcher Reihenfolge
 assert.equal(mergeStatus(mergeStatus({}, { K: { active: true } }), { K: { active: false } }).K.active, true, 'aktiv bleibt');
 assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { active: true } }).K.active, true, 'aktiv überschreibt pausiert');
+
+// --- Landingpages: Pakete halbieren, wenn Meta "zu viel Daten" meldet --------
+{
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const ids = new URL(url).searchParams.get('ids').split(',');
+    calls.push(ids.length);
+    const body = ids.length > 20
+      ? { error: { message: "Please reduce the amount of data you're asking for", code: 1 } }
+      : Object.fromEntries(ids.map((id) => [id, { creative: { object_story_spec: { video_data: { call_to_action: { value: { link: `https://secretbusiness.live/v4?ad=${id}` } } } } } }]));
+    return { status: 200, json: async () => body };
+  };
+  try {
+    urlCache.clear();
+    const ids = Array.from({ length: 60 }, (_, i) => String(1000 + i));
+    const c = { version: 'v21.0', token: 'T', account: 'act_1' };
+    const urls = await fetchAdUrls(c, ids);
+    assert.equal(urls.size, 60, 'alle 60 Anzeigen aufgelöst');
+    assert.deepEqual(urls.get('1000'), ['https://secretbusiness.live/v4?ad=1000']);
+    assert.equal(calls[0], 50, 'erst 50er-Paket');
+    assert.ok(calls.slice(1).every((n) => n <= 25), 'nach Code 1 kleinere Pakete');
+    const before = calls.length;
+    await fetchAdUrls(c, ids);
+    assert.equal(calls.length, before, 'zweiter Abruf kommt komplett aus dem Zwischenspeicher');
+  } finally {
+    globalThis.fetch = realFetch;
+    urlCache.clear();
+  }
+}
 
 console.log('✓ Alle Meta-Tests bestanden');
 console.log('  Gesamt-Spend:', agg.totals.spend, '€ | Placements:', Object.keys(agg.byDim.placement).join(', '));

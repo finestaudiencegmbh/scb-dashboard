@@ -252,13 +252,59 @@ async function fetchDailyEntities(c, range) {
  * Creative eingesammelt, ohne Bild-/Video-Adressen von Facebook/Instagram.
  * Ergebnis: Map Ad-ID -> [URL, …]
  */
-async function fetchAdUrls(c) {
-  const rows = await graphGet(
-    `${GRAPH}/${c.version}/${c.account}/ads?fields=id,creative{link_url,object_url,template_url,object_story_spec,asset_feed_spec}&limit=200&access_token=${c.token}`
-  );
-  const out = new Map();
-  for (const r of rows) out.set(String(r.id), collectUrls(r.creative));
-  return out;
+// Nur die Felder, in denen Meta die Ziel-URL ablegt – das komplette Creative
+// (object_story_spec mit Texten, Bildern, Videos …) ist Meta schnell "zu viel".
+const URL_FIELDS = 'creative{link_url,object_url,template_url,'
+  + 'object_story_spec{link_data{link,child_attachments{link}},video_data{call_to_action{value{link}}},template_data{link}},'
+  + 'asset_feed_spec{link_urls{website_url}}}';
+// Ziel-URLs ändern sich praktisch nie -> 6 h merken, spart Abrufe bei jedem "Aktualisieren"
+const URL_TTL = 6 * 60 * 60 * 1000;
+const urlCache = new Map(); // Ad-ID -> { at, urls }
+
+/** Einzelner Graph-Abruf ohne Paging (für ?ids=…). Netzwerkfehler 1x wiederholen. */
+async function graphObject(url) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url);
+      const json = await res.json().catch(() => null);
+      if (!json) throw new Error(`Meta: unerwartete Antwort (HTTP ${res.status})`);
+      if (json.error) {
+        const err = new Error(`Meta-Fehler: ${json.error.message}${json.error.code ? ` (Code ${json.error.code})` : ''}`);
+        err.metaCode = json.error.code;
+        throw err;
+      }
+      return json;
+    } catch (err) {
+      if (err.metaCode != null || attempt === 1) throw err;
+      await sleep(1500);
+    }
+  }
+  return {};
+}
+
+/**
+ * Ziel-URLs NUR für die übergebenen Anzeigen (die im Zeitraum Spend hatten),
+ * in Paketen über ?ids=. Meldet Meta "zu viel Daten" (Code 1), wird das Paket
+ * halbiert und erneut versucht.
+ */
+async function fetchAdUrls(c, adIds) {
+  const now = Date.now();
+  const ids = [...new Set((adIds || []).map(String).filter(Boolean))];
+  const missing = ids.filter((id) => !(urlCache.get(id)?.at > now - URL_TTL));
+  let size = 50;
+  for (let i = 0; i < missing.length;) {
+    const chunk = missing.slice(i, i + size);
+    const url = `${GRAPH}/${c.version}/?ids=${chunk.join(',')}&fields=${encodeURIComponent(URL_FIELDS)}&access_token=${c.token}`;
+    try {
+      const json = await graphObject(url);
+      for (const id of chunk) urlCache.set(id, { at: now, urls: collectUrls(json[id]?.creative) });
+      i += chunk.length;
+    } catch (err) {
+      if ((err.metaCode === 1 || err.metaCode === 2) && size > 1) { size = Math.max(1, Math.floor(size / 2)); continue; }
+      throw err;
+    }
+  }
+  return new Map(ids.map((id) => [id, urlCache.get(id)?.urls || []]));
 }
 
 const MEDIA_HOST = /(fbcdn\.net|facebook\.com|fb\.me|fb\.com|instagram\.com|cdninstagram\.com|whatsapp\.com)/i;
@@ -334,7 +380,7 @@ export async function fetchMetaAll(customRange) {
     targets.map(async ({ account, token }) => {
       try {
         const c = { ...base, account, token };
-        const [records, entities, daily, dailyEntities, status, name, adUrls] = await Promise.all([
+        const [records, entities, daily, dailyEntities, status, name] = await Promise.all([
           fetchPlacementRecords(c, range),
           fetchEntities(c, range),
           fetchDaily(c, range),
@@ -348,13 +394,14 @@ export async function fetchMetaAll(customRange) {
           }),
           fetchStatus(c).catch(() => ({ campaignStatus: {}, adsetStatus: {}, adStatus: {} })),
           fetchAccountName(c).catch(() => account),
-          // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js)
-          fetchAdUrls(c).catch((err) => {
-            console.error(`Meta-Konto ${account}: Landingpages der Anzeigen nicht lesbar:`, err.message);
-            accountWarnings.push(`${account}: Landingpages der Anzeigen nicht lesbar (${err.message})`);
-            return null;
-          }),
         ]);
+        // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js) –
+        // nur für Anzeigen mit Spend im Zeitraum, daher nach den Insights
+        const adUrls = await fetchAdUrls(c, entities.map((e) => e.adId)).catch((err) => {
+          console.error(`Meta-Konto ${account}: Landingpages der Anzeigen nicht lesbar:`, err.message);
+          accountWarnings.push(`${account}: Landingpages der Anzeigen nicht lesbar (${err.message})`);
+          return null;
+        });
         // Entities mit ihrem Werbekonto markieren (für die optische Trennung)
         return {
           account, name, records, daily, status,
@@ -436,4 +483,4 @@ export async function fetchMetaInsights() {
   return all ? all.records : null;
 }
 
-export const _internal = { normAccount, positionLabel, actionSum, mergeStatus };
+export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache };
