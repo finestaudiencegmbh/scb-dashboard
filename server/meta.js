@@ -354,17 +354,45 @@ async function fetchAccountName(c) {
 }
 
 /** effective_status je Kampagne (+objective), Anzeigengruppe und Werbeanzeige. */
-async function fetchStatus(c) {
-  const camps = await graphGet(
-    `${GRAPH}/${c.version}/${c.account}/campaigns?fields=id,name,effective_status,objective&limit=500&access_token=${c.token}`
-  );
-  const adsets = await graphGet(
-    `${GRAPH}/${c.version}/${c.account}/adsets?fields=id,name,effective_status,campaign_id&limit=500&access_token=${c.token}`
-  );
-  const ads = await graphGet(
-    `${GRAPH}/${c.version}/${c.account}/ads?fields=id,name,effective_status,adset{name},campaign{name}&limit=500&access_token=${c.token}`
-  );
+/**
+ * Liste abrufen und bei "zu viel Daten" (Code 1/2) mit halber Seitengröße
+ * wiederholen. build(limit) liefert die URL.
+ */
+async function graphGetAdaptive(build, limit = 200) {
+  for (;;) {
+    try {
+      return await graphGet(build(limit));
+    } catch (err) {
+      if (/\(Code (1|2)\)/.test(err.message) && limit > 25) { limit = Math.floor(limit / 2); continue; }
+      throw err;
+    }
+  }
+}
+
+/**
+ * effective_status je Kampagne (+objective), Anzeigengruppe und Werbeanzeige.
+ * Die drei Listen werden UNABHÄNGIG geholt: scheitert eine, bleiben die anderen
+ * erhalten, und der Grund landet in warn() statt still zu verschwinden.
+ * Ohne Status kann das Dashboard nicht zwischen aktiv und pausiert
+ * unterscheiden ("Nur aktive" blendet dann nichts aus).
+ */
+async function fetchStatus(c, warn = () => {}) {
+  const base = `${GRAPH}/${c.version}/${c.account}`;
+  const tok = `access_token=${c.token}`;
+  const get = (label, build) => graphGetAdaptive(build).catch((err) => {
+    warn(`Status der ${label} nicht lesbar (${err.message})`);
+    return [];
+  });
+  const [camps, adsets, ads] = await Promise.all([
+    get('Kampagnen', (n) => `${base}/campaigns?fields=id,name,effective_status,objective&limit=${n}&${tok}`),
+    get('Anzeigengruppen', (n) => `${base}/adsets?fields=id,name,effective_status,campaign_id&limit=${n}&${tok}`),
+    // schlank: nur IDs statt verschachtelter adset{name}/campaign{name}; die
+    // Namen kommen über die beiden Listen oben
+    get('Werbeanzeigen', (n) => `${base}/ads?fields=id,name,effective_status,adset_id,campaign_id&limit=${n}&${tok}`),
+  ]);
   const isActive = (s) => s === 'ACTIVE';
+  const campaignName = new Map(camps.map((x) => [String(x.id), String(x.name).trim()]));
+  const adsetName = new Map(adsets.map((x) => [String(x.id), String(x.name).trim()]));
   const campaignStatus = {};
   for (const x of camps) {
     campaignStatus[String(x.name).trim()] = { status: x.effective_status, active: isActive(x.effective_status), objective: x.objective || null };
@@ -372,16 +400,13 @@ async function fetchStatus(c) {
   const adsetStatus = {};
   for (const x of adsets) adsetStatus[String(x.name).trim()] = { status: x.effective_status, active: isActive(x.effective_status) };
   const adStatus = {};
-  // Komplette Ad-Liste – die Anzeigengruppe/Kampagne kommt DIREKT je Ad aus Meta
-  // (Feld-Expansion adset{name}/campaign{name}), keine ID-Auflösung die scheitern
-  // kann. So lässt sich jede Ad robust ihrer Anzeigengruppe zuordnen.
   const adList = [];
   for (const x of ads) {
     const name = String(x.name).trim();
     adStatus[name] = { status: x.effective_status, active: isActive(x.effective_status) };
     adList.push({
       id: x.id, name, active: isActive(x.effective_status), status: x.effective_status,
-      campaign: String(x.campaign?.name ?? '').trim(), adset: String(x.adset?.name ?? '').trim(),
+      campaign: campaignName.get(String(x.campaign_id)) || '', adset: adsetName.get(String(x.adset_id)) || '',
     });
   }
   return { campaignStatus, adsetStatus, adStatus, adList };
@@ -417,7 +442,10 @@ export async function fetchMetaAll(customRange) {
             accountWarnings.push(`${account}: Tagesdaten für die Grafik fehlen (${err.message})`);
             return [];
           }),
-          fetchStatus(c).catch(() => ({ campaignStatus: {}, adsetStatus: {}, adStatus: {} })),
+          fetchStatus(c, (msg) => {
+            console.error(`Meta-Konto ${account}: ${msg}`);
+            accountWarnings.push(`${account}: ${msg}`);
+          }),
           fetchAccountName(c).catch(() => account),
         ]);
         // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js) –
@@ -508,4 +536,4 @@ export async function fetchMetaInsights() {
   return all ? all.records : null;
 }
 
-export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache };
+export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache, fetchStatus };

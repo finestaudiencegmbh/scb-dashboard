@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { _internal, accountTargets } from './meta.js';
 import { aggregateFb } from './supermetrics.js';
 
-const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache } = _internal;
+const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache, fetchStatus } = _internal;
 
 assert.equal(normAccount('367913946654819'), 'act_367913946654819', 'act_ wird ergänzt');
 assert.equal(normAccount('act_367913946654819'), 'act_367913946654819', 'act_ bleibt erhalten');
@@ -97,6 +97,38 @@ assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { activ
   } finally {
     globalThis.fetch = realFetch;
     urlCache.clear();
+  }
+}
+
+// --- Status: Listen unabhängig, kleinere Seiten bei "zu viel Daten" ---------
+{
+  const realFetch = globalThis.fetch;
+  const ok = (body) => ({ status: 200, json: async () => body });
+  const limits = [];
+  globalThis.fetch = async (url) => {
+    const u = new URL(url);
+    const limit = Number(u.searchParams.get('limit'));
+    if (u.pathname.endsWith('/campaigns')) return ok({ data: [{ id: 'c1', name: 'Webinar', effective_status: 'ACTIVE' }] });
+    if (u.pathname.endsWith('/adsets')) {
+      return ok({ data: [
+        { id: 'a1', name: 'LP V4 | Video Stack #1', effective_status: 'ACTIVE', campaign_id: 'c1' },
+        { id: 'a2', name: 'LP V4 | Video Stack #2 old mix', effective_status: 'PAUSED', campaign_id: 'c1' },
+      ] });
+    }
+    limits.push(limit);
+    if (limit > 100) return ok({ error: { message: "Please reduce the amount of data you're asking for", code: 1 } });
+    return ok({ data: [{ id: 'x1', name: 'Ad 1', effective_status: 'ACTIVE', adset_id: 'a1', campaign_id: 'c1' }] });
+  };
+  const warnings = [];
+  try {
+    const st = await fetchStatus({ version: 'v26.0', token: 'T', account: 'act_1' }, (m) => warnings.push(m));
+    assert.equal(st.adsetStatus['LP V4 | Video Stack #2 old mix'].active, false, 'pausierte Anzeigengruppe erkannt');
+    assert.equal(st.adsetStatus['LP V4 | Video Stack #1'].active, true);
+    assert.deepEqual(st.adList[0], { id: 'x1', name: 'Ad 1', active: true, status: 'ACTIVE', campaign: 'Webinar', adset: 'LP V4 | Video Stack #1' }, 'Namen über IDs aufgelöst');
+    assert.ok(limits.includes(100), 'Werbeanzeigen mit halbierter Seitengröße');
+    assert.deepEqual(warnings, [], 'keine Warnung, weil der zweite Versuch klappt');
+  } finally {
+    globalThis.fetch = realFetch;
   }
 }
 
