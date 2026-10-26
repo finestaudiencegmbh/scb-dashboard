@@ -10,7 +10,7 @@ import { buildDataset } from './build.js';
 import { loadScoringConfig, qualifiedTiersOf } from './scoring.js';
 import { getSampleParsed } from './sample-data.js';
 import { isSupermetricsConfigured, fetchFbInsights, aggregateFb } from './supermetrics.js';
-import { isMetaConfigured, fetchMetaAll } from './meta.js';
+import { isMetaConfigured, fetchMetaAll, diagnoseMeta } from './meta.js';
 import { resolveAdIds } from './adid.js';
 import { combineByAccount } from './accounts.js';
 import { applyScope } from './scope.js';
@@ -168,6 +168,19 @@ app.get('/api/data', async (req, res) => {
 
 // Diagnose: wo steckt ein Creative/eine Ad in jeder Datenquelle?
 // Aufruf: /api/debug/find?q=Video Ad #4
+// Diagnose: jeden Meta-Abruf je Konto einzeln ausführen (ok/Fehler/Zeilen/Dauer).
+// Aufruf: /api/debug/meta  oder  /api/debug/meta?from=2026-10-20&to=2026-10-26
+app.get('/api/debug/meta', async (req, res) => {
+  try {
+    if (!isMetaConfigured()) return res.json({ error: 'Meta nicht konfiguriert (META_ACCESS_TOKEN / META_AD_ACCOUNT_ID).' });
+    const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+    const range = isYmd(req.query.from) && isYmd(req.query.to) ? { since: req.query.from, until: req.query.to } : null;
+    res.json(await diagnoseMeta(range));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/debug/find', async (req, res) => {
   try {
     const q = String(req.query.q || '').toLowerCase().trim();

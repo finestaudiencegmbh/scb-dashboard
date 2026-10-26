@@ -530,6 +530,54 @@ function mergeStatus(target, source = {}) {
   return target;
 }
 
+/**
+ * Diagnose: führt JEDEN Meta-Abruf für jedes Konto einzeln aus und meldet
+ * je Schritt ok/Fehler, Zeilen und Dauer – ohne etwas zu verschlucken. Für
+ * /api/debug/meta, damit alle Probleme auf einmal sichtbar werden.
+ */
+export async function diagnoseMeta(customRange) {
+  const base = cfg();
+  const range = customRange?.since && customRange?.until ? customRange : dateRange(base.lookback);
+  const out = { version: base.version, range, accounts: [] };
+  for (const { account, token } of accountTargets()) {
+    const c = { ...base, account, token };
+    const steps = [];
+    const run = async (step, fn, count = (r) => (Array.isArray(r) ? r.length : r?.size ?? null)) => {
+      const t0 = Date.now();
+      try {
+        const r = await fn();
+        steps.push({ step, ok: true, rows: count(r), ms: Date.now() - t0 });
+        return r;
+      } catch (err) {
+        steps.push({ step, ok: false, error: err.message, ms: Date.now() - t0 });
+        return null;
+      }
+    };
+    const name = await run('Kontoname', () => fetchAccountName(c), () => null);
+    const entities = await run('Kennzahlen je Anzeige', () => fetchEntities(c, range));
+    await run('Placements', () => fetchPlacementRecords(c, range));
+    await run('Tagesspend Konto', () => fetchDaily(c, range));
+    await run('Tagesdaten je Anzeige (Grafik)', () => fetchDailyEntities(c, range));
+    const statusWarnings = [];
+    await run('Status (Kampagnen/Anzeigengruppen/Anzeigen)', async () => {
+      const st = await fetchStatus(c, (m) => statusWarnings.push(m));
+      if (statusWarnings.length) throw new Error(statusWarnings.join(' | '));
+      return st.adList;
+    });
+    const ids = (entities || []).map((e) => e.adId);
+    const urls = await run('Landingpages', () => fetchAdUrls(c, ids));
+    const domains = {};
+    for (const list of urls ? urls.values() : []) {
+      for (const u of list) {
+        const host = u.replace(/^https?:\/\//, '').split(/[/?#]/)[0];
+        domains[host] = (domains[host] || 0) + 1;
+      }
+    }
+    out.accounts.push({ account, name, tokenSource: token === process.env.META_ACCESS_TOKEN ? 'META_ACCESS_TOKEN' : 'eigenes Token (_2 …)', steps, landingpageDomains: domains });
+  }
+  return out;
+}
+
 /** Rückwärtskompatibel: nur die Placement-Records (für aggregateFb). */
 export async function fetchMetaInsights() {
   const all = await fetchMetaAll();
