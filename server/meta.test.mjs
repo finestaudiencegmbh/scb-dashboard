@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { _internal, accountTargets } from './meta.js';
 import { aggregateFb } from './supermetrics.js';
 
-const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache, fetchStatus, fetchDailyEntities, dailyCache } = _internal;
+const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache, fetchStatus, statusCache, fetchDailyEntities, dailyCache } = _internal;
 
 assert.equal(normAccount('367913946654819'), 'act_367913946654819', 'act_ wird ergänzt');
 assert.equal(normAccount('act_367913946654819'), 'act_367913946654819', 'act_ bleibt erhalten');
@@ -81,19 +81,27 @@ assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { activ
     await fetchAdUrls(c, ids);
     assert.equal(sizes.length, before, 'zweiter Abruf kommt komplett aus dem Zwischenspeicher');
 
-    // Fall 2: Meta lehnt den Filter ab (Code 100) -> jede Anzeige einzeln
+    // Fall 2: Meta lehnt den Filter ab (Code 100) -> Anzeigen seitenweise lesen,
+    // nur was dort fehlt einzeln
     const single = [];
+    let listCalls = 0;
     globalThis.fetch = async (url) => {
       const u = new URL(url);
       if (u.searchParams.has('filtering')) return ok({ error: { message: 'Filtering field id is invalid', code: 100 } });
+      if (u.pathname.endsWith('/ads')) {
+        listCalls += 1;
+        return ok({ data: ids.slice(0, 5).map((id) => ({ id, creative: creative(id) })) });
+      }
       const id = u.pathname.split('/').pop();
       single.push(id);
       return ok({ id, creative: creative(id) });
     };
     urlCache.clear();
     const urls2 = await fetchAdUrls(c, ids.slice(0, 8));
-    assert.equal(single.length, 8, 'Fallback: 8 Einzelabrufe');
+    assert.equal(listCalls, 1, 'Fallback: ein seitenweiser Abruf');
+    assert.equal(single.length, 3, 'nur die 3 dort fehlenden Anzeigen einzeln');
     assert.deepEqual(urls2.get('1007'), ['https://secretbusiness.live/v4?ad=1007']);
+    assert.deepEqual(urls2.get('1002'), ['https://secretbusiness.live/v4?ad=1002']);
   } finally {
     globalThis.fetch = realFetch;
     urlCache.clear();
@@ -127,8 +135,21 @@ assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { activ
     assert.deepEqual(st.adList[0], { id: 'x1', name: 'Ad 1', active: true, status: 'ACTIVE', campaign: 'Webinar', adset: 'LP V4 | Video Stack #1' }, 'Namen über IDs aufgelöst');
     assert.ok(limits.includes(100), 'Werbeanzeigen mit halbierter Seitengröße');
     assert.deepEqual(warnings, [], 'keine Warnung, weil der zweite Versuch klappt');
+
+    // Innerhalb von 10 Min: kein neuer Abruf
+    const n = limits.length;
+    await fetchStatus({ version: 'v26.0', token: 'T', account: 'act_1' }, (m) => warnings.push(m));
+    assert.equal(limits.length, n, 'Status kommt aus dem Zwischenspeicher');
+
+    // Abruf-Limit (Code 17) nach Ablauf: letzter guter Stand statt "alles unbekannt"
+    for (const v of statusCache.values()) v.at -= 30 * 60 * 1000;
+    globalThis.fetch = async () => ok({ error: { message: 'User request limit reached', code: 17 } });
+    const st2 = await fetchStatus({ version: 'v26.0', token: 'T', account: 'act_1', }, (m) => warnings.push(m));
+    assert.equal(st2.adsetStatus['LP V4 | Video Stack #2 old mix'].active, false, 'pausiert bleibt bekannt');
+    assert.ok(warnings.some((w) => w.includes('von vor 30 Min')), 'als veraltet gemeldet');
   } finally {
     globalThis.fetch = realFetch;
+    statusCache.clear();
   }
 }
 

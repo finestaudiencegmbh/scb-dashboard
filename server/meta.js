@@ -353,8 +353,9 @@ async function graphObject(url) {
  *
  * Weg 1: Anzeigen des Kontos, gefiltert nach Ad-ID, in 50er-Paketen. Meldet
  *        Meta "zu viel Daten" (Code 1/2), wird das Paket halbiert.
- * Weg 2: Lehnt Meta den Filter ab (z. B. andere API-Version), jede Anzeige
- *        einzeln über /{ad-id} – das geht in jeder Version. Höchstens 6 parallel.
+ * Weg 2: Lehnt Meta den Filter ab, alle Anzeigen des Kontos seitenweise (je
+ *        100, nur URL-Felder) – wenige Abrufe, schont das Abruf-Limit.
+ * Weg 3: Was danach noch fehlt, einzeln über /{ad-id} (höchstens 20).
  * (Der früher genutzte Parameter ?ids= ist ab Graph-API v26 abgeschaltet.)
  */
 async function fetchAdUrls(c, adIds) {
@@ -384,8 +385,17 @@ async function fetchAdUrls(c, adIds) {
       }
     }
   } catch (err) {
-    console.warn(`Meta-Konto ${c.account}: Ad-Filter abgelehnt (${err.message}) – lese Anzeigen einzeln`);
-    const queue = [...rest];
+    console.warn(`Meta-Konto ${c.account}: Ad-Filter abgelehnt (${err.message}) – lese Anzeigen seitenweise`);
+    // Weg 2: alle Anzeigen des Kontos seitenweise (je 100) mit nur den URL-Feldern –
+    // wenige Abrufe statt einem je Anzeige (schont das Abruf-Limit, Code 17)
+    const wanted = new Set(rest);
+    const rows = await graphGetAdaptive((n) => `${GRAPH}/${c.version}/${c.account}/ads?fields=${encodeURIComponent(`id,${URL_FIELDS}`)}&limit=${n}&access_token=${c.token}`, 100);
+    for (const row of rows) {
+      if (wanted.delete(String(row.id))) remember(String(row.id), row.creative);
+    }
+    // Weg 3: was dann noch fehlt (z. B. gelöschte Anzeigen) einzeln, aber höchstens 20
+    const queue = [...wanted].slice(0, 20);
+    for (const id of [...wanted].slice(20)) remember(id, null);
     const worker = async () => {
       while (queue.length) {
         const id = queue.shift();
@@ -442,13 +452,33 @@ async function graphGetAdaptive(build, limit = 200) {
  * Ohne Status kann das Dashboard nicht zwischen aktiv und pausiert
  * unterscheiden ("Nur aktive" blendet dann nichts aus).
  */
+// Status-Listen: 10 Min frisch halten (spart Abrufe bei jedem "Aktualisieren"),
+// bei Fehlern (z. B. Abruf-Limit, Code 17) bis zu 24 h den letzten guten Stand nutzen.
+const STATUS_FRESH = 10 * 60 * 1000;
+const STATUS_STALE_MAX = 24 * 60 * 60 * 1000;
+const statusCache = new Map(); // `${account}|${label}` -> { at, rows }
+
 async function fetchStatus(c, warn = () => {}) {
   const base = `${GRAPH}/${c.version}/${c.account}`;
   const tok = `access_token=${c.token}`;
-  const get = (label, build) => graphGetAdaptive(build).catch((err) => {
-    warn(`Status der ${label} nicht lesbar (${err.message})`);
-    return [];
-  });
+  const get = async (label, build) => {
+    const key = `${c.account}|${label}`;
+    const hit = statusCache.get(key);
+    if (hit && Date.now() - hit.at < STATUS_FRESH) return hit.rows;
+    try {
+      const rows = await graphGetAdaptive(build);
+      statusCache.set(key, { at: Date.now(), rows });
+      return rows;
+    } catch (err) {
+      if (hit && Date.now() - hit.at < STATUS_STALE_MAX) {
+        const min = Math.round((Date.now() - hit.at) / 60000);
+        warn(`Status der ${label} von vor ${min} Min (aktuell nicht lesbar: ${err.message})`);
+        return hit.rows;
+      }
+      warn(`Status der ${label} nicht lesbar (${err.message})`);
+      return [];
+    }
+  };
   const [camps, adsets, ads] = await Promise.all([
     get('Kampagnen', (n) => `${base}/campaigns?fields=id,name,effective_status,objective&limit=${n}&${tok}`),
     get('Anzeigengruppen', (n) => `${base}/adsets?fields=id,name,effective_status,campaign_id&limit=${n}&${tok}`),
@@ -656,4 +686,4 @@ export async function fetchMetaInsights() {
   return all ? all.records : null;
 }
 
-export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache, fetchStatus, fetchDailyEntities, dailyCache };
+export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache, fetchStatus, statusCache, fetchDailyEntities, dailyCache };
