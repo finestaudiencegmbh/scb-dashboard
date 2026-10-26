@@ -13,7 +13,8 @@ export async function fetchData({ refresh = false, from = '', to = '', retries =
     try {
       // Timeout, damit ein hängender Abruf nicht ewig blockiert
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 60000);
+      // großzügig: der erste Abruf großer Zeiträume kann dauern, der Ladebalken zeigt den Fortschritt
+      const timer = setTimeout(() => ctrl.abort(), 180000);
       const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) {

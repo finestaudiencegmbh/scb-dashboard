@@ -31,6 +31,12 @@ function presetRange(key) {
   }
 }
 
+/** Standard-Zeitraum beim Öffnen: dieser Monat bis heute. */
+export function thisMonthRange() {
+  const [s, e] = presetRange('thisMonth');
+  return { from: ymd(s), to: ymd(e) };
+}
+
 const PRESETS = [
   { key: 'maximum', label: 'Maximum' },
   { key: 'today', label: 'Heute' },

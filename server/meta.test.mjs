@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { _internal, accountTargets } from './meta.js';
 import { aggregateFb } from './supermetrics.js';
 
-const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache, fetchStatus } = _internal;
+const { normAccount, positionLabel, mergeStatus, fetchAdUrls, urlCache, fetchStatus, fetchDailyEntities, dailyCache } = _internal;
 
 assert.equal(normAccount('367913946654819'), 'act_367913946654819', 'act_ wird ergänzt');
 assert.equal(normAccount('act_367913946654819'), 'act_367913946654819', 'act_ bleibt erhalten');
@@ -129,6 +129,39 @@ assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { activ
     assert.deepEqual(warnings, [], 'keine Warnung, weil der zweite Versuch klappt');
   } finally {
     globalThis.fetch = realFetch;
+  }
+}
+
+// --- Tagesdaten: 90 Tage in Fenstern, zu schwere Fenster werden halbiert ---
+{
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const u = new URL(url);
+    const { since, until } = JSON.parse(u.searchParams.get('time_range'));
+    const days = Math.round((new Date(until) - new Date(since)) / 86400000) + 1;
+    calls.push(days);
+    // großes Konto: mehr als 3 Tage am Stück sind Meta "zu schwer"
+    if (days > 3) return { status: 200, json: async () => ({ error: { message: 'An unknown error occurred', code: 1 } }) };
+    const data = [];
+    for (let d = new Date(since); d <= new Date(until); d.setUTCDate(d.getUTCDate() + 1)) {
+      data.push({ date_start: d.toISOString().slice(0, 10), campaign_name: 'K', adset_name: 'A', ad_name: 'Ad', publisher_platform: 'facebook', spend: '10' });
+    }
+    return { status: 200, json: async () => ({ data }) };
+  };
+  try {
+    dailyCache.clear();
+    const c = { version: 'v21.0', token: 'T', account: 'act_1' };
+    const rows = await fetchDailyEntities(c, { since: '2026-07-01', until: '2026-09-28' });
+    assert.equal(rows.length, 90, 'alle 90 Tage vollständig, trotz Code 1 bei großen Fenstern');
+    assert.equal(new Set(rows.map((r) => r.date)).size, 90, 'kein Tag doppelt oder fehlend');
+    assert.equal(Math.max(...calls), 7, 'nie mehr als 7 Tage am Stück angefragt');
+    const n = calls.length;
+    await fetchDailyEntities(c, { since: '2026-07-01', until: '2026-09-28' });
+    assert.equal(calls.length, n, 'abgeschlossene Fenster kommen aus dem Zwischenspeicher');
+  } finally {
+    globalThis.fetch = realFetch;
+    dailyCache.clear();
   }
 }
 

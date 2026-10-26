@@ -104,7 +104,7 @@ const RATE_LIMIT_CODES = new Set([1, 2, 4, 17, 613, 80000, 80004]);
 // unvollständig – das wird als Fehler gemeldet statt still abgeschnitten.
 const MAX_PAGES = 400;
 
-async function graphGet(url) {
+async function graphGet(url, { attempts = 4 } = {}) {
   const out = [];
   let next = url;
   let guard = 0;
@@ -113,18 +113,18 @@ async function graphGet(url) {
     let json = null;
     // bis zu 4 Versuche – bei Rate-Limit (Code 4 etc.) UND bei Netzwerkfehlern,
     // mit ansteigender Wartezeit. So überstehen wir transiente Abbrüche.
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       try {
         const res = await fetch(next);
         json = await res.json().catch(() => null);
         if (!json) throw new Error(`Meta: unerwartete Antwort (HTTP ${res.status})`);
         if (json.error && RATE_LIMIT_CODES.has(json.error.code)) {
-          if (attempt < 3) { await sleep(2000 * (attempt + 1)); continue; }
+          if (attempt < attempts - 1) { await sleep(2000 * (attempt + 1)); continue; }
         }
         break; // Erfolg oder nicht-retrybarer Meta-Fehler
       } catch (err) {
         // Netzwerk-/Parsing-Fehler -> erneut versuchen, sonst durchreichen
-        if (attempt < 3) { await sleep(1500 * (attempt + 1)); json = null; continue; }
+        if (attempt < attempts - 1) { await sleep(1500 * (attempt + 1)); json = null; continue; }
         throw err;
       }
     }
@@ -222,16 +222,82 @@ async function fetchDaily(c, range) {
  * überlagerbaren KPIs). time_increment '1' = pro Tag, breakdowns =
  * publisher_platform (Facebook/Instagram/…) für den Ad-Spend pro Plattform.
  */
+// Tagesdaten je Anzeige × Plattform werden schnell riesig (Anzeigen × Tage ×
+// Plattformen). Meta bricht solche Abfragen mit Code 1 ab ("unknown error" /
+// "reduce the amount of data"). Deshalb: in 7-Tage-Fenstern abfragen, bei
+// Code 1/2 das Fenster halbieren (bis 1 Tag), höchstens 3 Fenster parallel.
+// Abgeschlossene Fenster (Ende vor gestern) werden 12 h gemerkt.
+const DAILY_WINDOW_DAYS = 7;
+const DAILY_CACHE_TTL = 12 * 60 * 60 * 1000;
+const dailyCache = new Map(); // `${account}|${since}|${until}` -> { at, rows }
+
+const addDays = (ymdStr, n) => {
+  const d = new Date(`${ymdStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000) + 1;
+
+/** Zeitraum in Fenster zu je `size` Tagen zerlegen. */
+export function splitRange({ since, until }, size = DAILY_WINDOW_DAYS) {
+  const out = [];
+  for (let s = since; s <= until; s = addDays(s, size)) {
+    const e = addDays(s, size - 1);
+    out.push({ since: s, until: e < until ? e : until });
+  }
+  return out;
+}
+
+async function fetchDailyWindow(c, win) {
+  const key = `${c.account}|${win.since}|${win.until}`;
+  const hit = dailyCache.get(key);
+  if (hit && Date.now() - hit.at < DAILY_CACHE_TTL) return hit.rows;
+  let raw;
+  try {
+    raw = await graphGet(
+      insightsUrl(c, {
+        level: 'ad',
+        fields: 'campaign_name,adset_name,ad_name,spend,impressions,clicks,unique_outbound_clicks',
+        breakdowns: 'publisher_platform',
+        time_range: JSON.stringify(win),
+        time_increment: '1',
+      }),
+      // nicht wiederholen: bei "zu schwer" ist Halbieren der bessere zweite Versuch
+      { attempts: 1 }
+    );
+  } catch (err) {
+    const days = daysBetween(win.since, win.until);
+    if (/\(Code (1|2)\)/.test(err.message) && days > 1) {
+      const half = Math.ceil(days / 2);
+      const first = { since: win.since, until: addDays(win.since, half - 1) };
+      const second = { since: addDays(win.since, half), until: win.until };
+      const rows = [...(await fetchDailyWindow(c, first)), ...(await fetchDailyWindow(c, second))];
+      if (win.until < addDays(ymd(new Date()), -1)) dailyCache.set(key, { at: Date.now(), rows });
+      return rows;
+    }
+    throw err;
+  }
+  const rows = mapDailyRows(raw);
+  // Nur abgeschlossene Fenster merken – die letzten Tage ändern sich noch
+  if (win.until < addDays(ymd(new Date()), -1)) dailyCache.set(key, { at: Date.now(), rows });
+  return rows;
+}
+
 async function fetchDailyEntities(c, range) {
-  const rows = await graphGet(
-    insightsUrl(c, {
-      level: 'ad',
-      fields: 'campaign_name,adset_name,ad_name,spend,impressions,clicks,unique_outbound_clicks',
-      breakdowns: 'publisher_platform',
-      time_range: JSON.stringify(range),
-      time_increment: '1',
-    })
-  );
+  const windows = splitRange(range);
+  const results = new Array(windows.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < windows.length) {
+      const i = next++;
+      results[i] = await fetchDailyWindow(c, windows[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, windows.length) }, worker));
+  return results.flat();
+}
+
+function mapDailyRows(rows) {
   return rows.map((r) => ({
     date: r.date_start,
     campaign: String(r.campaign_name ?? '').trim(),
@@ -416,41 +482,47 @@ async function fetchStatus(c, warn = () => {}) {
  * (META_AD_ACCOUNT_ID kommagetrennt). Die Ergebnisse werden zusammengeführt:
  * Records/Entities/Tages-Entitäten aneinandergehängt, Konto-Tagesspend je Datum
  * summiert, Status-Maps gemerged. Optional mit explizitem Zeitraum. */
-export async function fetchMetaAll(customRange) {
+/** Anzahl der Abrufe je Werbekonto in fetchMetaAll (für die Fortschrittsanzeige). */
+export const META_STEPS_PER_ACCOUNT = 7;
+
+export async function fetchMetaAll(customRange, onStep = () => {}) {
   if (!isMetaConfigured()) return null;
   const base = cfg();
   const range = customRange?.since && customRange?.until ? customRange : dateRange(base.lookback);
   const targets = accountTargets();
+  // Meldet jeden fertigen (auch gescheiterten) Abruf an die Fortschrittsanzeige
+  const step = (n, label) => (p) => p.finally(() => onStep(`Meta Konto ${n}/${targets.length}: ${label}`));
 
   // Pro Konto alles parallel holen. Schlägt EIN Konto fehl, wird es übersprungen
   // (Warnung im Log), damit die übrigen Konten trotzdem angezeigt werden.
   const accountErrors = [];
   const accountWarnings = [];
   const perAccount = (await Promise.all(
-    targets.map(async ({ account, token }) => {
+    targets.map(async ({ account, token }, i) => {
+      const tick = (label, p) => step(i + 1, label)(p);
       try {
         const c = { ...base, account, token };
         const [records, entities, daily, dailyEntities, status, name] = await Promise.all([
-          fetchPlacementRecords(c, range),
-          fetchEntities(c, range),
-          fetchDaily(c, range),
+          tick('Placements', fetchPlacementRecords(c, range)),
+          tick('Kennzahlen', fetchEntities(c, range)),
+          tick('Tagesspend', fetchDaily(c, range)),
           // Optional für die Grafik je Kampagne/Anzeige. Scheitert der Abruf, läuft
           // der Rest weiter – der Grund wird aber gemeldet (accountWarnings),
           // sonst zeigt die Grafik stillschweigend 0 € Spend.
-          fetchDailyEntities(c, range).catch((err) => {
+          tick('Tagesdaten je Anzeige', fetchDailyEntities(c, range).catch((err) => {
             console.error(`Meta-Konto ${account}: Tagesdaten je Anzeige fehlen:`, err.message);
             accountWarnings.push(`${account}: Tagesdaten für die Grafik fehlen (${err.message})`);
             return [];
-          }),
-          fetchStatus(c, (msg) => {
+          })),
+          tick('Status', fetchStatus(c, (msg) => {
             console.error(`Meta-Konto ${account}: ${msg}`);
             accountWarnings.push(`${account}: ${msg}`);
-          }),
-          fetchAccountName(c).catch(() => account),
+          })),
+          tick('Kontoname', fetchAccountName(c).catch(() => account)),
         ]);
         // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js) –
         // nur für Anzeigen mit Spend im Zeitraum, daher nach den Insights
-        const adUrls = await fetchAdUrls(c, entities.map((e) => e.adId)).catch((err) => {
+        const adUrls = await tick('Landingpages', fetchAdUrls(c, entities.map((e) => e.adId))).catch((err) => {
           console.error(`Meta-Konto ${account}: Landingpages der Anzeigen nicht lesbar:`, err.message);
           accountWarnings.push(`${account}: Landingpages der Anzeigen nicht lesbar (${err.message})`);
           return null;
@@ -584,4 +656,4 @@ export async function fetchMetaInsights() {
   return all ? all.records : null;
 }
 
-export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache, fetchStatus };
+export const _internal = { normAccount, positionLabel, actionSum, mergeStatus, fetchAdUrls, urlCache, fetchStatus, fetchDailyEntities, dailyCache };

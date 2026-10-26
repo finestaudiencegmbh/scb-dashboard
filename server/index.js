@@ -10,7 +10,7 @@ import { buildDataset } from './build.js';
 import { loadScoringConfig, qualifiedTiersOf } from './scoring.js';
 import { getSampleParsed } from './sample-data.js';
 import { isSupermetricsConfigured, fetchFbInsights, aggregateFb } from './supermetrics.js';
-import { isMetaConfigured, fetchMetaAll, diagnoseMeta } from './meta.js';
+import { isMetaConfigured, fetchMetaAll, diagnoseMeta, accountTargets, META_STEPS_PER_ACCOUNT } from './meta.js';
 import { resolveAdIds } from './adid.js';
 import { combineByAccount } from './accounts.js';
 import { applyScope } from './scope.js';
@@ -51,12 +51,44 @@ if (AUTH_USER && AUTH_PASS) {
 // --- Daten-Cache (je Zeitraum) ---------------------------------------------
 const cache = new Map(); // key -> { at, payload }
 
-async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
-  const key = `${from}|${to}`;
+// --- Fortschritt laufender Ladevorgänge (für den Ladebalken im Frontend) ---
+// Je Zeitraum: { done, total, label, startedAt }. Der Balken bildet echte,
+// abgeschlossene Abrufe ab – keine geschätzte Zeit.
+const progress = new Map();
+const inflight = new Map(); // gleicher Zeitraum parallel angefragt -> ein Ladevorgang
+
+function startProgress(key, total) {
+  const p = { done: 0, total, label: 'Starte…', startedAt: Date.now(), finished: false };
+  progress.set(key, p);
+  return {
+    step: (label) => { p.done = Math.min(p.total - 1, p.done + 1); if (label) p.label = label; },
+    finish: () => { p.done = p.total; p.label = 'Fertig'; p.finished = true; setTimeout(() => { if (progress.get(key) === p) progress.delete(key); }, 30000); },
+  };
+}
+
+function loadDataset(opts = {}) {
+  const key = `${opts.from || ''}|${opts.to || ''}`;
   const hit = cache.get(key);
-  if (!refresh && hit && Date.now() - hit.at < CACHE_TTL) {
-    return hit.payload;
+  if (!opts.refresh && hit && Date.now() - hit.at < CACHE_TTL) return Promise.resolve(hit.payload);
+  if (inflight.has(key)) return inflight.get(key);
+  const run = buildPayload(opts).finally(() => inflight.delete(key));
+  inflight.set(key, run);
+  return run;
+}
+
+async function buildPayload({ from = '', to = '' } = {}) {
+  const key = `${from}|${to}`;
+  const metaSteps = isMetaConfigured() ? accountTargets().length * META_STEPS_PER_ACCOUNT : 0;
+  // Sheet + Meta-Abrufe + Berechnen
+  const prog = startProgress(key, 1 + metaSteps + 1);
+  try {
+    return await buildPayloadInner({ from, to, key, prog });
+  } finally {
+    prog.finish();
   }
+}
+
+async function buildPayloadInner({ from, to, key, prog }) {
   const cfg = loadScoringConfig();
   const features = PROJECT.features;
   const qualifiedTiers = qualifiedTiersOf(cfg);
@@ -64,11 +96,13 @@ async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
   let source;
   if (isConfigured()) {
     const sheets = await fetchAllSheets();
+    prog.step('Google Sheet geladen');
     parsed = parseSheets(sheets, PROJECT.sheet, features);
     source = 'google';
   } else {
     parsed = getSampleParsed(PROJECT);
     source = 'demo';
+    prog.step('Demo-Daten geladen');
   }
   const dataset = buildDataset(parsed, cfg, features, PROJECT.sheet.utmRoles);
 
@@ -81,7 +115,7 @@ async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
   let fb = { configured: metaOn || smOn, provider: metaOn ? 'meta' : smOn ? 'supermetrics' : null, error: null, totals: null, byDim: null, rows: 0, hierarchy: null, daily: null };
   if (metaOn) {
     try {
-      const all = await fetchMetaAll(range);
+      const all = await fetchMetaAll(range, (label) => prog.step(label));
       // Sheet-Zeilen mit Ad-ID exakt auf die Meta-Anzeige legen (vor dem
       // Zeitraum-Filter, damit auch die Leadliste dieselben Namen zeigt).
       // Bewusst gegen ALLE Kampagnen, damit auch Leads aus Kampagnen außerhalb
@@ -115,6 +149,7 @@ async function loadDataset({ refresh = false, from = '', to = '' } = {}) {
     }
   }
 
+  prog.step('Kennzahlen berechnet');
   const payload = {
     source,
     fetchedAt: new Date().toISOString(),
@@ -150,6 +185,16 @@ app.get('/api/health', (req, res) => {
 // damit Farbe, Logo und Titel sofort stimmen.
 app.get('/api/config', (req, res) => {
   res.json(publicProjectConfig(PROJECT));
+});
+
+// Fortschritt des laufenden Ladevorgangs für einen Zeitraum (Ladebalken).
+app.get('/api/progress', (req, res) => {
+  const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+  const key = `${isYmd(req.query.from) ? req.query.from : ''}|${isYmd(req.query.to) ? req.query.to : ''}`;
+  const p = progress.get(key);
+  res.set('Cache-Control', 'no-store');
+  if (!p) return res.json({ active: false });
+  res.json({ active: !p.finished, done: p.done, total: p.total, label: p.label, elapsedMs: Date.now() - p.startedAt });
 });
 
 app.get('/api/data', async (req, res) => {

@@ -8,11 +8,12 @@ import LeadsTable from './components/LeadsTable.jsx';
 import TimeChart from './components/TimeChart.jsx';
 import IntradayChart from './components/IntradayChart.jsx';
 import CampaignCards from './components/CampaignCards.jsx';
-import DateRangePicker from './components/DateRangePicker.jsx';
+import DateRangePicker, { thisMonthRange } from './components/DateRangePicker.jsx';
 import SourcesView from './components/SourcesView.jsx';
 import ChatBot from './components/ChatBot.jsx';
 import LeadHeatmap from './components/LeadHeatmap.jsx';
 import DataSources from './components/DataSources.jsx';
+import LoadProgress from './components/LoadProgress.jsx';
 import { useProject } from './project.jsx';
 import { fmtEur, fmtInt } from './lib.js';
 
@@ -37,8 +38,9 @@ export default function App() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [range, setRange] = useState({ from: '', to: '' });
+  // Standard beim Öffnen: "Dieser Monat" statt "Maximum" – lädt deutlich schneller
+  const [range, setRange] = useState(thisMonthRange);
+  const [filters, setFilters] = useState(() => ({ ...EMPTY_FILTERS, from: range.from, to: range.to }));
   const [view, setView] = useState('dashboard');
 
   const load = async (refresh = false, r = range) => {
@@ -94,7 +96,7 @@ export default function App() {
     return rows;
   }, [data, filtered, fb, orgDrill, features, qualifiedTiers]);
 
-  if (loading && !data) return <div className="loader">Lade Daten…</div>;
+  if (loading && !data) return <LoadProgress range={range} />;
 
   return (
     <div className="layout">
@@ -122,6 +124,7 @@ export default function App() {
       </aside>
 
       <main className="content">
+        {loading && data && <LoadProgress range={range} variant="bar" />}
         <header className="topbar">
           <div className="topbar-title">
             <img className="topbar-logo" src={branding.logo} alt="" width="34" height="34" />
