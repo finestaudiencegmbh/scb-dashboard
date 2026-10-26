@@ -261,7 +261,7 @@ const URL_FIELDS = 'creative{link_url,object_url,template_url,'
 const URL_TTL = 6 * 60 * 60 * 1000;
 const urlCache = new Map(); // Ad-ID -> { at, urls }
 
-/** Einzelner Graph-Abruf ohne Paging (für ?ids=…). Netzwerkfehler 1x wiederholen. */
+/** Einzelner Graph-Abruf ohne Paging (ohne data-Paging). Netzwerkfehler 1x wiederholen. */
 async function graphObject(url) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -283,26 +283,51 @@ async function graphObject(url) {
 }
 
 /**
- * Ziel-URLs NUR für die übergebenen Anzeigen (die im Zeitraum Spend hatten),
- * in Paketen über ?ids=. Meldet Meta "zu viel Daten" (Code 1), wird das Paket
- * halbiert und erneut versucht.
+ * Ziel-URLs NUR für die übergebenen Anzeigen (die im Zeitraum Spend hatten).
+ *
+ * Weg 1: Anzeigen des Kontos, gefiltert nach Ad-ID, in 50er-Paketen. Meldet
+ *        Meta "zu viel Daten" (Code 1/2), wird das Paket halbiert.
+ * Weg 2: Lehnt Meta den Filter ab (z. B. andere API-Version), jede Anzeige
+ *        einzeln über /{ad-id} – das geht in jeder Version. Höchstens 6 parallel.
+ * (Der früher genutzte Parameter ?ids= ist ab Graph-API v26 abgeschaltet.)
  */
 async function fetchAdUrls(c, adIds) {
   const now = Date.now();
   const ids = [...new Set((adIds || []).map(String).filter(Boolean))];
   const missing = ids.filter((id) => !(urlCache.get(id)?.at > now - URL_TTL));
-  let size = 50;
-  for (let i = 0; i < missing.length;) {
-    const chunk = missing.slice(i, i + size);
-    const url = `${GRAPH}/${c.version}/?ids=${chunk.join(',')}&fields=${encodeURIComponent(URL_FIELDS)}&access_token=${c.token}`;
-    try {
-      const json = await graphObject(url);
-      for (const id of chunk) urlCache.set(id, { at: now, urls: collectUrls(json[id]?.creative) });
-      i += chunk.length;
-    } catch (err) {
-      if ((err.metaCode === 1 || err.metaCode === 2) && size > 1) { size = Math.max(1, Math.floor(size / 2)); continue; }
-      throw err;
+  const remember = (id, creative) => urlCache.set(id, { at: now, urls: collectUrls(creative) });
+
+  let rest = missing;
+  try {
+    let size = 50;
+    for (let i = 0; i < missing.length;) {
+      const chunk = missing.slice(i, i + size);
+      const filtering = JSON.stringify([{ field: 'id', operator: 'IN', value: chunk }]);
+      const url = `${GRAPH}/${c.version}/${c.account}/ads?fields=${encodeURIComponent(`id,${URL_FIELDS}`)}`
+        + `&filtering=${encodeURIComponent(filtering)}&limit=${size}&access_token=${c.token}`;
+      try {
+        const json = await graphObject(url);
+        for (const row of json.data || []) remember(String(row.id), row.creative);
+        // Anzeigen, die der Filter nicht zurückgab (z. B. gelöscht): leer merken
+        for (const id of chunk) if (!urlCache.has(id) || urlCache.get(id).at !== now) remember(id, null);
+        i += chunk.length;
+        rest = missing.slice(i);
+      } catch (err) {
+        if ((err.metaCode === 1 || err.metaCode === 2) && size > 1) { size = Math.max(1, Math.floor(size / 2)); continue; }
+        throw err;
+      }
     }
+  } catch (err) {
+    console.warn(`Meta-Konto ${c.account}: Ad-Filter abgelehnt (${err.message}) – lese Anzeigen einzeln`);
+    const queue = [...rest];
+    const worker = async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        const json = await graphObject(`${GRAPH}/${c.version}/${id}?fields=${encodeURIComponent(URL_FIELDS)}&access_token=${c.token}`);
+        remember(id, json.creative);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
   }
   return new Map(ids.map((id) => [id, urlCache.get(id)?.urls || []]));
 }

@@ -53,30 +53,47 @@ assert.deepEqual(
 assert.equal(mergeStatus(mergeStatus({}, { K: { active: true } }), { K: { active: false } }).K.active, true, 'aktiv bleibt');
 assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { active: true } }).K.active, true, 'aktiv überschreibt pausiert');
 
-// --- Landingpages: Pakete halbieren, wenn Meta "zu viel Daten" meldet --------
+// --- Landingpages: Ad-Filter mit Paket-Halbierung, sonst einzeln -----------
 {
-  const calls = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
-    const ids = new URL(url).searchParams.get('ids').split(',');
-    calls.push(ids.length);
-    const body = ids.length > 20
-      ? { error: { message: "Please reduce the amount of data you're asking for", code: 1 } }
-      : Object.fromEntries(ids.map((id) => [id, { creative: { object_story_spec: { video_data: { call_to_action: { value: { link: `https://secretbusiness.live/v4?ad=${id}` } } } } } }]));
-    return { status: 200, json: async () => body };
-  };
+  const creative = (id) => ({ object_story_spec: { video_data: { call_to_action: { value: { link: `https://secretbusiness.live/v4?ad=${id}` } } } } });
+  const c = { version: 'v26.0', token: 'T', account: 'act_1' };
+  const ids = Array.from({ length: 60 }, (_, i) => String(1000 + i));
+  const ok = (body) => ({ status: 200, json: async () => body });
   try {
+    // Fall 1: Filter wird akzeptiert, große Pakete sind Meta "zu viel" (Code 1)
+    const sizes = [];
+    globalThis.fetch = async (url) => {
+      const u = new URL(url);
+      assert.ok(!u.searchParams.has('ids'), 'kein ?ids= (ab v26 abgeschaltet)');
+      const chunk = JSON.parse(u.searchParams.get('filtering'))[0].value;
+      sizes.push(chunk.length);
+      if (chunk.length > 20) return ok({ error: { message: "Please reduce the amount of data you're asking for", code: 1 } });
+      return ok({ data: chunk.map((id) => ({ id, creative: creative(id) })) });
+    };
     urlCache.clear();
-    const ids = Array.from({ length: 60 }, (_, i) => String(1000 + i));
-    const c = { version: 'v21.0', token: 'T', account: 'act_1' };
     const urls = await fetchAdUrls(c, ids);
     assert.equal(urls.size, 60, 'alle 60 Anzeigen aufgelöst');
     assert.deepEqual(urls.get('1000'), ['https://secretbusiness.live/v4?ad=1000']);
-    assert.equal(calls[0], 50, 'erst 50er-Paket');
-    assert.ok(calls.slice(1).every((n) => n <= 25), 'nach Code 1 kleinere Pakete');
-    const before = calls.length;
+    assert.equal(sizes[0], 50, 'erst 50er-Paket');
+    assert.ok(sizes.slice(1).every((n) => n <= 25), 'nach Code 1 kleinere Pakete');
+    const before = sizes.length;
     await fetchAdUrls(c, ids);
-    assert.equal(calls.length, before, 'zweiter Abruf kommt komplett aus dem Zwischenspeicher');
+    assert.equal(sizes.length, before, 'zweiter Abruf kommt komplett aus dem Zwischenspeicher');
+
+    // Fall 2: Meta lehnt den Filter ab (Code 100) -> jede Anzeige einzeln
+    const single = [];
+    globalThis.fetch = async (url) => {
+      const u = new URL(url);
+      if (u.searchParams.has('filtering')) return ok({ error: { message: 'Filtering field id is invalid', code: 100 } });
+      const id = u.pathname.split('/').pop();
+      single.push(id);
+      return ok({ id, creative: creative(id) });
+    };
+    urlCache.clear();
+    const urls2 = await fetchAdUrls(c, ids.slice(0, 8));
+    assert.equal(single.length, 8, 'Fallback: 8 Einzelabrufe');
+    assert.deepEqual(urls2.get('1007'), ['https://secretbusiness.live/v4?ad=1007']);
   } finally {
     globalThis.fetch = realFetch;
     urlCache.clear();
