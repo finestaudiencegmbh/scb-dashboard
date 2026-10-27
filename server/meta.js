@@ -452,9 +452,12 @@ async function graphGetAdaptive(build, limit = 200) {
  * Ohne Status kann das Dashboard nicht zwischen aktiv und pausiert
  * unterscheiden ("Nur aktive" blendet dann nichts aus).
  */
-// Status-Listen: 10 Min frisch halten (spart Abrufe bei jedem "Aktualisieren"),
-// bei Fehlern (z. B. Abruf-Limit, Code 17) bis zu 24 h den letzten guten Stand nutzen.
-const STATUS_FRESH = 10 * 60 * 1000;
+// Status-Listen sparsam abrufen – das Token eines Kontos läuft sonst ins
+// Meta-Abruf-Limit (Code 17): normal 30 Min wiederverwenden, beim manuellen
+// "Aktualisieren" nur, wenn älter als 3 Min. Bei Fehlern bis zu 24 h den
+// letzten guten Stand nutzen.
+const STATUS_FRESH = 30 * 60 * 1000;
+const STATUS_FRESH_MANUAL = 3 * 60 * 1000;
 const STATUS_STALE_MAX = 24 * 60 * 60 * 1000;
 const statusCache = new Map(); // `${account}|${label}` -> { at, rows }
 
@@ -464,8 +467,9 @@ async function fetchStatus(c, warn = () => {}, { fresh = false } = {}) {
   const get = async (label, build) => {
     const key = `${c.account}|${label}`;
     const hit = statusCache.get(key);
-    // 'Aktualisieren' (fresh) holt immer neu – sonst fehlen frisch angelegte Anzeigen
-    if (!fresh && hit && Date.now() - hit.at < STATUS_FRESH) return hit.rows;
+    // 'Aktualisieren' (fresh) akzeptiert nur einen sehr jungen Stand – so tauchen
+    // frisch angelegte Anzeigen auf, ohne bei jedem Klick neu abzurufen
+    if (hit && Date.now() - hit.at < (fresh ? STATUS_FRESH_MANUAL : STATUS_FRESH)) return hit.rows;
     try {
       const rows = await graphGetAdaptive(build);
       statusCache.set(key, { at: Date.now(), rows });
