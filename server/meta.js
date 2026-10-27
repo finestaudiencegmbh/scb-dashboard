@@ -681,6 +681,36 @@ export async function diagnoseMeta(customRange) {
   return out;
 }
 
+/**
+ * Leichtgewichtige Suche für /api/debug/find: je Konto nur die Kennzahlen je
+ * Anzeige (Zeitraum) und die Status-/Ad-Liste (zwischengespeichert) – keine
+ * Placements, keine Tagesdaten, keine Landingpages. Schont Speicher und Limit.
+ */
+export async function findInMeta(range, match) {
+  const base = cfg();
+  const out = { insights: [], adList: [], errors: [] };
+  for (const { account, token } of accountTargets()) {
+    const c = { ...base, account, token };
+    try {
+      const entities = await fetchEntities(c, range);
+      for (const e of entities) {
+        if (match(e.creative) || match(e.adset) || match(e.campaign)) {
+          out.insights.push({ konto: account, kampagne: e.campaign, anzeigengruppe: e.adset, creative: e.creative, ad_id: e.adId, spend: e.spend });
+        }
+      }
+    } catch (err) {
+      out.errors.push(`${account} Kennzahlen: ${err.message}`);
+    }
+    const st = await fetchStatus(c, (m) => out.errors.push(`${account}: ${m}`));
+    for (const a of st.adList) {
+      if (match(a.name) || match(a.adset) || match(a.campaign)) {
+        out.adList.push({ konto: account, name: a.name, kampagne: a.campaign, anzeigengruppe: a.adset, aktiv: a.active, status: a.status, ad_id: a.id });
+      }
+    }
+  }
+  return out;
+}
+
 /** Rückwärtskompatibel: nur die Placement-Records (für aggregateFb). */
 export async function fetchMetaInsights() {
   const all = await fetchMetaAll();

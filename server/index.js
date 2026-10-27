@@ -10,7 +10,7 @@ import { buildDataset } from './build.js';
 import { loadScoringConfig, qualifiedTiersOf } from './scoring.js';
 import { getSampleParsed } from './sample-data.js';
 import { isSupermetricsConfigured, fetchFbInsights, aggregateFb } from './supermetrics.js';
-import { isMetaConfigured, fetchMetaAll, diagnoseMeta, accountTargets, META_STEPS_PER_ACCOUNT } from './meta.js';
+import { isMetaConfigured, fetchMetaAll, diagnoseMeta, findInMeta, accountTargets, META_STEPS_PER_ACCOUNT } from './meta.js';
 import { resolveAdIds } from './adid.js';
 import { combineByAccount } from './accounts.js';
 import { applyScope } from './scope.js';
@@ -231,37 +231,37 @@ app.get('/api/debug/find', async (req, res) => {
     const q = String(req.query.q || '').toLowerCase().trim();
     if (!q) return res.json({ error: 'Bitte ?q=... angeben, z. B. /api/debug/find?q=Video Ad #4' });
     const has = (s) => String(s ?? '').toLowerCase().includes(q);
+    // Standard: dieser Monat (leicht); optional ?from=…&to=…
+    const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const range = isYmd(req.query.from) && isYmd(req.query.to)
+      ? { since: req.query.from, until: req.query.to }
+      : { since: `${today.slice(0, 8)}01`, until: today };
 
-    // Sheet-Leads (kompletter Datensatz, ohne Zeitraum-Filter)
-    const payload = await loadDataset({});
-    const leads = payload.leads || [];
+    // Sheet-Leads: nur Sheet lesen, KEIN kompletter Dashboard-Abruf
     const leadGroups = {};
     let leadCount = 0;
-    for (const l of leads) {
-      if (!(has(l.creative) || has(l.mediumRaw) || has(l.adset) || has(l.sourceRaw))) continue;
-      leadCount += 1;
-      const key = `${l.sourceType} | kampagne="${l.campaign}" | anzeigengruppe="${l.adset}" | creative="${l.creative}"`;
-      leadGroups[key] = (leadGroups[key] || 0) + 1;
+    if (isConfigured()) {
+      const parsed = parseSheets(await fetchAllSheets(), PROJECT.sheet, PROJECT.features);
+      const ds = buildDataset(parsed, loadScoringConfig(), PROJECT.features, PROJECT.sheet.utmRoles);
+      for (const l of ds.leads) {
+        if (!(has(l.creative) || has(l.mediumRaw) || has(l.adset) || has(l.sourceRaw))) continue;
+        leadCount += 1;
+        const key = `${l.sourceType} | kampagne="${l.campaign}" | anzeigengruppe="${l.adset}" | creative="${l.creative}" | ad_id=${l.adId || '-'}`;
+        leadGroups[key] = (leadGroups[key] || 0) + 1;
+      }
     }
 
-    // Meta: Insights (Auslieferung im Lookback) + komplette Ad-Liste
-    let metaInsights = [];
-    let metaAdliste = [];
-    if (isMetaConfigured()) {
-      const all = await fetchMetaAll();
-      metaInsights = (all.entities || [])
-        .filter((e) => has(e.creative) || has(e.adset) || has(e.campaign))
-        .map((e) => ({ account: e.account, kampagne: e.campaign, anzeigengruppe: e.adset, creative: e.creative, spend: e.spend }));
-      metaAdliste = (all.adList || [])
-        .filter((a) => has(a.name) || has(a.adset) || has(a.campaign))
-        .map((a) => ({ name: a.name, kampagne: a.campaign, anzeigengruppe: a.adset, aktiv: a.active, status: a.status }));
-    }
-
+    const meta = isMetaConfigured() ? await findInMeta(range, has) : { insights: [], adList: [], errors: [] };
     res.json({
       suchbegriff: q,
+      zeitraum: range,
       sheet_leads: { treffer: leadCount, gruppen: leadGroups },
-      meta_insights: metaInsights,
-      meta_adliste: metaAdliste,
+      meta_insights: meta.insights,
+      meta_adliste: meta.adList,
+      meta_fehler: meta.errors,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
