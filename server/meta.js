@@ -458,13 +458,14 @@ const STATUS_FRESH = 10 * 60 * 1000;
 const STATUS_STALE_MAX = 24 * 60 * 60 * 1000;
 const statusCache = new Map(); // `${account}|${label}` -> { at, rows }
 
-async function fetchStatus(c, warn = () => {}) {
+async function fetchStatus(c, warn = () => {}, { fresh = false } = {}) {
   const base = `${GRAPH}/${c.version}/${c.account}`;
   const tok = `access_token=${c.token}`;
   const get = async (label, build) => {
     const key = `${c.account}|${label}`;
     const hit = statusCache.get(key);
-    if (hit && Date.now() - hit.at < STATUS_FRESH) return hit.rows;
+    // 'Aktualisieren' (fresh) holt immer neu – sonst fehlen frisch angelegte Anzeigen
+    if (!fresh && hit && Date.now() - hit.at < STATUS_FRESH) return hit.rows;
     try {
       const rows = await graphGetAdaptive(build);
       statusCache.set(key, { at: Date.now(), rows });
@@ -515,7 +516,7 @@ async function fetchStatus(c, warn = () => {}) {
 /** Anzahl der Abrufe je Werbekonto in fetchMetaAll (für die Fortschrittsanzeige). */
 export const META_STEPS_PER_ACCOUNT = 7;
 
-export async function fetchMetaAll(customRange, onStep = () => {}) {
+export async function fetchMetaAll(customRange, onStep = () => {}, { fresh = false } = {}) {
   if (!isMetaConfigured()) return null;
   const base = cfg();
   const range = customRange?.since && customRange?.until ? customRange : dateRange(base.lookback);
@@ -547,7 +548,7 @@ export async function fetchMetaAll(customRange, onStep = () => {}) {
           tick('Status', fetchStatus(c, (msg) => {
             console.error(`Meta-Konto ${account}: ${msg}`);
             accountWarnings.push(`${account}: ${msg}`);
-          })),
+          }, { fresh })),
           tick('Kontoname', fetchAccountName(c).catch(() => account)),
         ]);
         // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js) –

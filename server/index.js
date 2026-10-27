@@ -76,19 +76,19 @@ function loadDataset(opts = {}) {
   return run;
 }
 
-async function buildPayload({ from = '', to = '' } = {}) {
+async function buildPayload({ from = '', to = '', refresh = false } = {}) {
   const key = `${from}|${to}`;
   const metaSteps = isMetaConfigured() ? accountTargets().length * META_STEPS_PER_ACCOUNT : 0;
   // Sheet + Meta-Abrufe + Berechnen
   const prog = startProgress(key, 1 + metaSteps + 1);
   try {
-    return await buildPayloadInner({ from, to, key, prog });
+    return await buildPayloadInner({ from, to, key, prog, refresh });
   } finally {
     prog.finish();
   }
 }
 
-async function buildPayloadInner({ from, to, key, prog }) {
+async function buildPayloadInner({ from, to, key, prog, refresh }) {
   const cfg = loadScoringConfig();
   const features = PROJECT.features;
   const qualifiedTiers = qualifiedTiersOf(cfg);
@@ -115,7 +115,7 @@ async function buildPayloadInner({ from, to, key, prog }) {
   let fb = { configured: metaOn || smOn, provider: metaOn ? 'meta' : smOn ? 'supermetrics' : null, error: null, totals: null, byDim: null, rows: 0, hierarchy: null, daily: null };
   if (metaOn) {
     try {
-      const all = await fetchMetaAll(range, (label) => prog.step(label));
+      const all = await fetchMetaAll(range, (label) => prog.step(label), { fresh: refresh });
       // Sheet-Zeilen mit Ad-ID exakt auf die Meta-Anzeige legen (vor dem
       // Zeitraum-Filter, damit auch die Leadliste dieselben Namen zeigt).
       // Bewusst gegen ALLE Kampagnen, damit auch Leads aus Kampagnen außerhalb
