@@ -251,6 +251,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         id: e.adId,
         name: e.creative,
         active: resolveAdActive(e.campaign, e.adset, e.creative),
+        status: adStatusByPath.get(pathKey('creative', { campaign: e.campaign, adset: e.adset, creative: e.creative }))?.status ?? null,
         m: { spend: 0, impressions: 0, clicks: 0, uoc: 0, leads: adLeads.leads, tickets: adLeads.tickets, scoreSum: adLeads.scoreSum, scored: adLeads.scored, qualified: adLeads.qualified },
         acc: new Map(),
       });
@@ -290,7 +291,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
     for (const a of c.adsets.values()) {
       applyLeadStats(a._m, lookupLeads('adset', { campaign: c.name, adset: a.name }));
       for (const r of a._ads.values()) {
-        a.ads.push({ id: r.id, name: r.name, level: 'ad', active: r.active, accounts: accountSplit(r.acc), ...derive(r.m, features) });
+        a.ads.push({ id: r.id, name: r.name, level: 'ad', active: r.active, status: r.status, accounts: accountSplit(r.acc), ...derive(r.m, features) });
       }
       // Anzeigen OHNE Auslieferung im Zeitraum ergänzen (keine Insights-Zeile),
       // damit ALLE Ads der Anzeigengruppe auffindbar sind – mit echtem Status
@@ -301,7 +302,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         if (existingAdKeys.has(normKey(ad.name))) continue;
         existingAdKeys.add(normKey(ad.name));
         const adM = { spend: 0, impressions: 0, clicks: 0, uoc: 0, ...lookupLeads('creative', { campaign: c.name, adset: a.name, creative: ad.name }) };
-        a.ads.push({ id: ad.id, name: ad.name, level: 'ad', active: ad.active, ...derive(adM, features) });
+        a.ads.push({ id: ad.id, name: ad.name, level: 'ad', active: ad.active, status: ad.status ?? null, ...derive(adM, features) });
       }
       // Creatives, die NUR im Sheet vorkommen (Leads vorhanden, aber weder in den
       // FB-Insights noch in Metas Ad-Liste) – mit ihren Lead-Kennzahlen ergänzen.
@@ -309,7 +310,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         if (existingAdKeys.has(ck)) continue;
         existingAdKeys.add(ck);
         const adM = { spend: 0, impressions: 0, clicks: 0, uoc: 0, ...lookupLeads('creative', { campaign: c.name, adset: a.name, creative: cname }) };
-        a.ads.push({ id: `sheet:${ck}`, name: cname, level: 'ad', active: resolveAdActive(c.name, a.name, cname), ...derive(adM, features) });
+        a.ads.push({ id: `sheet:${ck}`, name: cname, level: 'ad', active: resolveAdActive(c.name, a.name, cname), status: adStatusByPath.get(pathKey('creative', { campaign: c.name, adset: a.name, creative: cname }))?.status ?? null, ...derive(adM, features) });
       }
       adsets.push({
         id: a.id, name: a.name, level: 'adset', active: a.active, status: a.status, accounts: accountSplit(a._acc),

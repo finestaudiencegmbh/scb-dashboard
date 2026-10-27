@@ -81,6 +81,10 @@ function StatusDot({ active }) {
 
 const LEVEL_LABEL = { campaign: 'Kampagne', adset: 'Anzeigengruppe', creative: 'Creative' };
 
+// Anzeigen, die in Meta eingeschaltet sind, aber nicht ausliefern: bleiben auch
+// bei "Nur aktive" sichtbar (hier muss man handeln) und bekommen einen Hinweis.
+const AD_ISSUES = { DISAPPROVED: 'Abgelehnt', WITH_ISSUES: 'Problem', PENDING_REVIEW: 'In Prüfung', IN_PROCESS: 'In Bearbeitung' };
+
 const campKey = (c) => `${c.account || ''}|${c.id ?? c.name}`;
 
 /** Griff zum Verschieben (sechs Punkte). */
@@ -219,7 +223,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                   {adsets.map((a) => {
                     const aId = `${c.id}/${a.id}`;
                     const aOpen = open.has(aId);
-                    const ads = (a.ads || []).filter((ad) => !onlyActive || ad.active !== false);
+                    const ads = (a.ads || []).filter((ad) => !onlyActive || ad.active !== false || AD_ISSUES[ad.status]);
                     return (
                       <div key={aId} className="cc-sub">
                         <div className="cc-subhead" onClick={() => toggle(aId)} role="button">
@@ -248,7 +252,9 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                                     <span className="cc-ad-name" title={ad.name}>
                                       {ad.active != null && <span className={`status-dot ${ad.active ? 'on' : 'off'}`} />}
                                       <span className="cc-ad-label">{ad.name}</span>
-                                      {ad.active === false && <span className="paused-tag">aus</span>}
+                                      {AD_ISSUES[ad.status]
+                                        ? <span className="issue-tag" title={`Meta-Status: ${ad.status}`}>{AD_ISSUES[ad.status]}</span>
+                                        : ad.active === false && <span className="paused-tag">aus</span>}
                                       {hasGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }) && <GraphBtn compact onClick={() => openGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }, ad.name)} />}
                                     </span>
                                     {adCols.map((c) => <span key={c.label}>{c.value(ad, leadHidden)}</span>)}
