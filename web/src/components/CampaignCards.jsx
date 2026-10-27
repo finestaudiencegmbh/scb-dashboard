@@ -246,7 +246,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                   {adsets.map((a) => {
                     const aId = `${c.id}/${a.id}`;
                     const aOpen = open.has(aId);
-                    const ads = (a.ads || []).filter((ad) => AD_ISSUES[ad.status] || shown(ad.active, 'creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }));
+                    const ads = (a.ads || []).filter((ad) => shown(ad.active, 'creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }));
                     return (
                       <div key={aId} className="cc-sub">
                         <div className="cc-subhead" onClick={() => toggle(aId)} role="button">
