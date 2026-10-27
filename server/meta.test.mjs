@@ -153,6 +153,57 @@ assert.equal(mergeStatus(mergeStatus({}, { K: { active: false } }), { K: { activ
   }
 }
 
+// --- Status nur für Kampagnen mit Spend (schont das Abruf-Limit) ------------
+{
+  const realFetch = globalThis.fetch;
+  const ok = (body) => ({ status: 200, json: async () => body });
+  const c = { version: 'v21.0', token: 'T', account: 'act_9' };
+  const seen = [];
+  const listFor = (u) => {
+    if (u.pathname.endsWith('/campaigns')) return { data: [{ id: 'c1', name: 'Webinar', effective_status: 'ACTIVE' }] };
+    if (u.pathname.endsWith('/adsets')) return { data: [{ id: 'a1', name: 'Old mix', effective_status: 'PAUSED', campaign_id: 'c1' }] };
+    return { data: [{ id: 'x1', name: 'Ad', effective_status: 'ACTIVE', adset_id: 'a1', campaign_id: 'c1' }] };
+  };
+  try {
+    // 1) Filter wird akzeptiert
+    globalThis.fetch = async (url) => { const u = new URL(url); seen.push(u); return ok(listFor(u)); };
+    statusCache.clear();
+    const st = await fetchStatus(c, () => {}, { campaignIds: ['c1', 'c1'] });
+    const adsetCall = seen.find((u) => u.pathname.endsWith('/adsets'));
+    const adCall = seen.find((u) => u.pathname.endsWith('/ads'));
+    assert.deepEqual(JSON.parse(adsetCall.searchParams.get('filtering')), [{ field: 'campaign.id', operator: 'IN', value: ['c1'] }], 'Anzeigengruppen nur der Kampagnen mit Spend');
+    assert.ok(adCall.searchParams.get('filtering'), 'Anzeigen ebenfalls gefiltert');
+    assert.equal(st.adsetStatus['Old mix'].active, false, 'pausierte Gruppe erkannt');
+
+    // 2) Filter abgelehnt (Code 100) -> ungefiltert nachladen
+    statusCache.clear();
+    globalThis.fetch = async (url) => {
+      const u = new URL(url);
+      if (u.searchParams.get('filtering')) return ok({ error: { message: 'Filtering field campaign.id is invalid', code: 100 } });
+      return ok(listFor(u));
+    };
+    const warns = [];
+    const st2 = await fetchStatus(c, (m) => warns.push(m), { campaignIds: ['c1'] });
+    assert.equal(st2.adsetStatus['Old mix'].active, false, 'Rückfall ungefiltert liefert den Status');
+    assert.deepEqual(warns, []);
+
+    // 3) Abruf-Limit (Code 17) -> KEIN ungefilterter Zusatzabruf
+    statusCache.clear();
+    let unfiltered = 0;
+    globalThis.fetch = async (url) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/campaigns')) return ok(listFor(u));
+      if (!u.searchParams.get('filtering')) unfiltered += 1;
+      return ok({ error: { message: 'User request limit reached', code: 17 } });
+    };
+    await fetchStatus(c, () => {}, { campaignIds: ['c1'] });
+    assert.equal(unfiltered, 0, 'beim Limit nicht noch mehr abrufen');
+  } finally {
+    globalThis.fetch = realFetch;
+    statusCache.clear();
+  }
+}
+
 // --- Tagesdaten: 90 Tage in Fenstern, zu schwere Fenster werden halbiert ---
 {
   const realFetch = globalThis.fetch;

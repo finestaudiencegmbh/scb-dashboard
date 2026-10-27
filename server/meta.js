@@ -461,24 +461,45 @@ const STATUS_FRESH_MANUAL = 3 * 60 * 1000;
 const STATUS_STALE_MAX = 24 * 60 * 60 * 1000;
 const statusCache = new Map(); // `${account}|${label}` -> { at, rows }
 
-async function fetchStatus(c, warn = () => {}, { fresh = false } = {}) {
+async function fetchStatus(c, warn = () => {}, { fresh = false, campaignIds = null } = {}) {
   const base = `${GRAPH}/${c.version}/${c.account}`;
   const tok = `access_token=${c.token}`;
-  const get = async (label, build) => {
-    const key = `${c.account}|${label}`;
+  // Anzeigengruppen und Anzeigen NUR der Kampagnen mit Spend im Zeitraum. Ohne
+  // diesen Filter holt der Abruf jede Gruppe/Anzeige, die es im Konto je gab –
+  // bei alten Konten dutzende Seiten, die das Token ins Abruf-Limit treiben (Code 17).
+  const ids = [...new Set((campaignIds || []).map(String).filter(Boolean))].sort();
+  const byCampaign = ids.length
+    ? `&filtering=${encodeURIComponent(JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: ids }]))}`
+    : '';
+  const get = async (label, build, buildUnfiltered = null) => {
+    // Frisch wiederverwenden nur bei GLEICHER Kampagnen-Liste (sonst fehlten die
+    // Gruppen einer neu gestarteten Kampagne). Als Rückfall bei Fehlern taugt
+    // dagegen jeder frühere Stand dieses Kontos.
+    const key = `${c.account}|${label}|${ids.join(',')}`;
+    const staleKey = `${c.account}|${label}`;
     const hit = statusCache.get(key);
     // 'Aktualisieren' (fresh) akzeptiert nur einen sehr jungen Stand – so tauchen
     // frisch angelegte Anzeigen auf, ohne bei jedem Klick neu abzurufen
     if (hit && Date.now() - hit.at < (fresh ? STATUS_FRESH_MANUAL : STATUS_FRESH)) return hit.rows;
     try {
-      const rows = await graphGetAdaptive(build);
+      let rows;
+      try {
+        rows = await graphGetAdaptive(build);
+      } catch (err) {
+        // Filter abgelehnt (z. B. Code 100) -> ungefiltert; beim Abruf-Limit NICHT,
+        // das würde es nur verschlimmern
+        if (!buildUnfiltered || /\(Code (4|17|613|80000|80004)\)/.test(err.message)) throw err;
+        rows = await graphGetAdaptive(buildUnfiltered);
+      }
       statusCache.set(key, { at: Date.now(), rows });
+      statusCache.set(staleKey, { at: Date.now(), rows });
       return rows;
     } catch (err) {
-      if (hit && Date.now() - hit.at < STATUS_STALE_MAX) {
-        const min = Math.round((Date.now() - hit.at) / 60000);
+      const old = statusCache.get(staleKey);
+      if (old && Date.now() - old.at < STATUS_STALE_MAX) {
+        const min = Math.round((Date.now() - old.at) / 60000);
         warn(`Status der ${label} von vor ${min} Min (aktuell nicht lesbar: ${err.message})`);
-        return hit.rows;
+        return old.rows;
       }
       warn(`Status der ${label} nicht lesbar (${err.message})`);
       return [];
@@ -486,10 +507,14 @@ async function fetchStatus(c, warn = () => {}, { fresh = false } = {}) {
   };
   const [camps, adsets, ads] = await Promise.all([
     get('Kampagnen', (n) => `${base}/campaigns?fields=id,name,effective_status,objective&limit=${n}&${tok}`),
-    get('Anzeigengruppen', (n) => `${base}/adsets?fields=id,name,effective_status,campaign_id&limit=${n}&${tok}`),
+    get('Anzeigengruppen',
+      (n) => `${base}/adsets?fields=id,name,effective_status,campaign_id&limit=${n}${byCampaign}&${tok}`,
+      byCampaign ? (n) => `${base}/adsets?fields=id,name,effective_status,campaign_id&limit=${n}&${tok}` : null),
     // schlank: nur IDs statt verschachtelter adset{name}/campaign{name}; die
     // Namen kommen über die beiden Listen oben
-    get('Werbeanzeigen', (n) => `${base}/ads?fields=id,name,effective_status,adset_id,campaign_id&limit=${n}&${tok}`),
+    get('Werbeanzeigen',
+      (n) => `${base}/ads?fields=id,name,effective_status,adset_id,campaign_id&limit=${n}${byCampaign}&${tok}`,
+      byCampaign ? (n) => `${base}/ads?fields=id,name,effective_status,adset_id,campaign_id&limit=${n}&${tok}` : null),
   ]);
   const isActive = (s) => s === 'ACTIVE';
   const campaignName = new Map(camps.map((x) => [String(x.id), String(x.name).trim()]));
@@ -537,9 +562,11 @@ export async function fetchMetaAll(customRange, onStep = () => {}, { fresh = fal
       const tick = (label, p) => step(i + 1, label)(p);
       try {
         const c = { ...base, account, token };
+        // Kennzahlen zuerst anstoßen: der Status braucht die Kampagnen mit Spend
+        const entitiesP = fetchEntities(c, range);
         const [records, entities, daily, dailyEntities, status, name] = await Promise.all([
           tick('Placements', fetchPlacementRecords(c, range)),
-          tick('Kennzahlen', fetchEntities(c, range)),
+          tick('Kennzahlen', entitiesP),
           tick('Tagesspend', fetchDaily(c, range)),
           // Optional für die Grafik je Kampagne/Anzeige. Scheitert der Abruf, läuft
           // der Rest weiter – der Grund wird aber gemeldet (accountWarnings),
@@ -549,10 +576,10 @@ export async function fetchMetaAll(customRange, onStep = () => {}, { fresh = fal
             accountWarnings.push(`${account}: Tagesdaten für die Grafik fehlen (${err.message})`);
             return [];
           })),
-          tick('Status', fetchStatus(c, (msg) => {
+          tick('Status', entitiesP.then((ents) => fetchStatus(c, (msg) => {
             console.error(`Meta-Konto ${account}: ${msg}`);
             accountWarnings.push(`${account}: ${msg}`);
-          }, { fresh })),
+          }, { fresh, campaignIds: ents.map((e) => e.campaignId) }))),
           tick('Kontoname', fetchAccountName(c).catch(() => account)),
         ]);
         // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js) –
@@ -667,7 +694,7 @@ export async function diagnoseMeta(customRange) {
     await run('Tagesdaten je Anzeige (Grafik)', () => fetchDailyEntities(c, range));
     const statusWarnings = [];
     await run('Status (Kampagnen/Anzeigengruppen/Anzeigen)', async () => {
-      const st = await fetchStatus(c, (m) => statusWarnings.push(m));
+      const st = await fetchStatus(c, (m) => statusWarnings.push(m), { campaignIds: (entities || []).map((e) => e.campaignId) });
       if (statusWarnings.length) throw new Error(statusWarnings.join(' | '));
       return st.adList;
     });
