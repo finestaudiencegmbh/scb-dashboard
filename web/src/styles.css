@@ -514,6 +514,7 @@ body {
 .cc-sorting, .cc-sorting * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 .cc-card.is-dragging { outline: 1px solid rgba(var(--accent-rgb), 0.7); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(var(--accent-rgb), 0.25); opacity: 0.92; position: relative; z-index: 5; }
 .cc-toolbar-right { display: inline-flex; align-items: center; gap: 14px; }
+.cc-status-hint { flex: 1 1 260px; margin-left: 16px; color: var(--faint); font-size: 12.5px; }
 .cc-order-reset { font-size: 13px; padding: 6px 12px; }
 .cc-name { font-weight: 650; font-size: 16px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-head-spend { margin-left: auto; font-weight: 700; font-size: 16px; color: var(--accent-ink); white-space: nowrap; }

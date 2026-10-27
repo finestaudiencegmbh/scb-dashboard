@@ -168,7 +168,30 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
 
   const { order, setOrder, sort } = useCampaignOrder(slug);
   const allSorted = sort(hierarchy || []);
-  const campaigns = allSorted.filter((c) => !onlyActive || c.active !== false);
+  // "Nur aktive": maßgeblich ist der Meta-Status. Liefert Meta ihn nicht (z. B.
+  // Abruf-Limit, Code 17 -> active === null), gilt als aktiv, was gestern oder
+  // heute Spend hatte. Gibt es für gestern/heute gar keine Tagesdaten (Zeitraum
+  // in der Vergangenheit, Grafikdaten fehlen), wird nichts ausgeblendet.
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const yd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const yesterday = `${yd.getFullYear()}-${pad2(yd.getMonth() + 1)}-${pad2(yd.getDate())}`;
+  const hasRecentData = Object.values(dailyByEntity?.campaign || {}).some((pts) => pts.some((p) => p.date >= yesterday));
+  const deliveredRecently = (dim, parts) =>
+    (dailyByEntity?.[dim]?.[entityKey(dim, parts)] || []).some((p) => p.date >= yesterday && p.spend > 0);
+  const isActive = (active, dim, parts) => {
+    if (active === false) return false;
+    if (active === true || !hasRecentData) return true;
+    return deliveredRecently(dim, parts);
+  };
+  let statusFallback = false;
+  const shown = (active, dim, parts) => {
+    if (!onlyActive) return true;
+    if (active == null && hasRecentData) statusFallback = true;
+    return isActive(active, dim, parts);
+  };
+
+  const campaigns = allSorted.filter((c) => shown(c.active, 'campaign', { campaign: c.name, account: c.account }));
 
   // Verschieben per Ziehen am Griff (Pointer-Events: Maus und Touch). Während
   // des Ziehens wird die Reihenfolge live umgestellt; ausgeblendete Kampagnen
@@ -204,7 +227,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
   const renderCampaign = (c) => {
           const cOpen = open.has(c.id);
           const leadHidden = c.leadCampaign === false;
-          const adsets = c.adsets.filter((a) => !onlyActive || a.active !== false);
+          const adsets = c.adsets.filter((a) => shown(a.active, 'adset', { campaign: c.name, adset: a.name, account: c.account }));
           return (
             <div key={c.id} data-cid={campKey(c)} className={`cc-card ${leadHidden ? 'is-traffic' : ''} ${dragId === campKey(c) ? 'is-dragging' : ''}`}>
               <div className="cc-head" onClick={() => toggle(c.id)} role="button">
@@ -223,7 +246,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                   {adsets.map((a) => {
                     const aId = `${c.id}/${a.id}`;
                     const aOpen = open.has(aId);
-                    const ads = (a.ads || []).filter((ad) => !onlyActive || ad.active !== false || AD_ISSUES[ad.status]);
+                    const ads = (a.ads || []).filter((ad) => AD_ISSUES[ad.status] || shown(ad.active, 'creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }));
                     return (
                       <div key={aId} className="cc-sub">
                         <div className="cc-subhead" onClick={() => toggle(aId)} role="button">
@@ -307,6 +330,11 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
           <span className="switch-track"><span className="switch-thumb" /></span>
           <span className="switch-label">Nur aktive anzeigen</span>
         </label>
+        {statusFallback && (
+          <span className="cc-status-hint" title="Meta hat den An/Aus-Status für einen Teil der Einträge nicht geliefert (meist Abruf-Limit, Code 17).">
+            Status teilweise ohne Meta-Angabe: als aktiv gilt, was gestern oder heute ausgeliefert hat
+          </span>
+        )}
         <span className="cc-toolbar-right">
           {order.length > 0 && <button className="ghost-btn cc-order-reset" onClick={() => setOrder([])}>Reihenfolge zurücksetzen</button>}
           <span className="muted">{campaigns.length} Kampagnen{accountList ? ` · ${accountList.length} Konten` : ''}</span>

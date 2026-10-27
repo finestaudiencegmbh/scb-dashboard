@@ -562,11 +562,18 @@ export async function fetchMetaAll(customRange, onStep = () => {}, { fresh = fal
       const tick = (label, p) => step(i + 1, label)(p);
       try {
         const c = { ...base, account, token };
-        // Kennzahlen zuerst anstoßen: der Status braucht die Kampagnen mit Spend
-        const entitiesP = fetchEntities(c, range);
-        const [records, entities, daily, dailyEntities, status, name] = await Promise.all([
+        // Reihenfolge bewusst: erst Kennzahlen (1 Abruf, liefert die Kampagnen mit
+        // Spend), dann SOFORT der Status (3 kleine Abrufe), danach der Rest. Meta
+        // begrenzt die ANZAHL der Abrufe pro Zeitfenster (Code 17); geht das
+        // Kontingent während des Ladens aus, trifft es so nicht den Status, von
+        // dem "Nur aktive" abhängt.
+        const entities = await tick('Kennzahlen', fetchEntities(c, range));
+        const status = await tick('Status', fetchStatus(c, (msg) => {
+          console.error(`Meta-Konto ${account}: ${msg}`);
+          accountWarnings.push(`${account}: ${msg}`);
+        }, { fresh, campaignIds: entities.map((e) => e.campaignId) }));
+        const [records, daily, dailyEntities, name] = await Promise.all([
           tick('Placements', fetchPlacementRecords(c, range)),
-          tick('Kennzahlen', entitiesP),
           tick('Tagesspend', fetchDaily(c, range)),
           // Optional für die Grafik je Kampagne/Anzeige. Scheitert der Abruf, läuft
           // der Rest weiter – der Grund wird aber gemeldet (accountWarnings),
@@ -576,10 +583,6 @@ export async function fetchMetaAll(customRange, onStep = () => {}, { fresh = fal
             accountWarnings.push(`${account}: Tagesdaten für die Grafik fehlen (${err.message})`);
             return [];
           })),
-          tick('Status', entitiesP.then((ents) => fetchStatus(c, (msg) => {
-            console.error(`Meta-Konto ${account}: ${msg}`);
-            accountWarnings.push(`${account}: ${msg}`);
-          }, { fresh, campaignIds: ents.map((e) => e.campaignId) }))),
           tick('Kontoname', fetchAccountName(c).catch(() => account)),
         ]);
         // Landingpages je Anzeige (für den Projekt-Bereich, server/scope.js) –
