@@ -21,7 +21,7 @@ function Root() {
     return () => { alive = false; };
   }, []);
 
-  if (!project) return <div className="loader">Lade…</div>;
+  if (!project) return <div className="loader" />;
 
   return (
     <ProjectProvider project={project}>

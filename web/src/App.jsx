@@ -42,6 +42,9 @@ export default function App() {
   const [range, setRange] = useState(thisMonthRange);
   const [filters, setFilters] = useState(() => ({ ...EMPTY_FILTERS, from: range.from, to: range.to }));
   const [view, setView] = useState('dashboard');
+  // Erster Start: HUD bleibt nach dem Laden kurz stehen und fährt auseinander,
+  // während sich das Dashboard darunter öffnet.
+  const [intro, setIntro] = useState(true);
 
   const load = async (refresh = false, r = range) => {
     setLoading(true);
@@ -56,6 +59,12 @@ export default function App() {
   };
 
   useEffect(() => { load(false); }, []);
+
+  useEffect(() => {
+    if (!intro || loading) return undefined;
+    const t = setTimeout(() => setIntro(false), data ? 1350 : 0);
+    return () => clearTimeout(t);
+  }, [intro, loading, data]);
 
   const applyRange = (r) => {
     setRange(r);
@@ -96,10 +105,16 @@ export default function App() {
     return rows;
   }, [data, filtered, fb, orgDrill, features, qualifiedTiers]);
 
-  if (loading && !data) return <LoadProgress range={range} />;
+  // Gleiche Position im Fragment in beiden Returns -> der HUD bleibt beim
+  // Übergang zum Dashboard gemountet (kein Neustart der Animation).
+  const opening = !(loading && !data);
+  const hud = (intro || !opening) && <LoadProgress range={range} closing={opening} />;
+  if (!opening) return <>{hud}</>;
 
   return (
-    <div className="layout">
+    <>
+    {hud}
+    <div className={`layout ${intro ? 'booting' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
           <img className="brand-logo" src={branding.logo} alt={project.name} width="40" height="40" />
@@ -301,5 +316,6 @@ export default function App() {
       </main>
       <ChatBot range={range} />
     </div>
+    </>
   );
 }
