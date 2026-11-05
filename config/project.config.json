@@ -118,7 +118,7 @@
         "columns": ["wie würde sich dein leben verändern, wenn du ortsunabhängig und online geld verdienst"],
         "wide": true
       },
-      "expectation": { "label": "Erwartung an das Live-Webinar", "columns": ["was erhoffst du dir vom live-webinar"], "wide": true }
+      "expectation": { "label": "Erwartung an das Live-Webinar", "columns": ["was erhoffst du dir vom live-workshop", "was erhoffst du dir vom live-webinar"], "wide": true }
     }
   }
 }
