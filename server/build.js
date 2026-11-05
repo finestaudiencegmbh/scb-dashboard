@@ -89,6 +89,22 @@ function isPaid(utm, paidAdsets, patterns, roles, paidMediums = []) {
   return false;
 }
 
+/**
+ * Webinar-Spalte -> kurzes Label und Datum: "Webinar 01.11.2026 um 11 Uhr"
+ * -> { label: "Webinar 01.11.26", date: "2026-11-01" }. Ohne erkennbares
+ * Datum bleibt der Text, wie er ist.
+ */
+export function webinarOf(raw) {
+  const v = collapse(raw);
+  if (!v) return { label: '', date: '' };
+  const m = v.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+  if (!m) return { label: v, date: '' };
+  const dd = m[1].padStart(2, '0');
+  const mm = m[2].padStart(2, '0');
+  const yyyy = m[3].length === 2 ? `20${m[3]}` : m[3];
+  return { label: `Webinar ${dd}.${mm}.${yyyy.slice(2)}`, date: `${yyyy}-${mm}-${dd}` };
+}
+
 /** Telefonnummer -> Vergleichsschlüssel (letzte 9 Ziffern, Vorwahl-Schreibweise egal). */
 const phoneKey = (s) => {
   const d = String(s ?? '').replace(/\D/g, '');
@@ -152,6 +168,20 @@ function buildAppointments(rows, { leads, tickets, dimsFor }) {
     if (k && !ticketByPhone.has(k)) ticketByPhone.set(k, t);
   }
 
+  // Webinar je Person (E-Mail/Telefon) und alle bekannten Webinare nach Datum
+  const webinarByEmail = new Map();
+  const webinarByPhone = new Map();
+  const known = new Map();
+  for (const p of [...(leads || []), ...(tickets || [])]) {
+    const w = webinarOf(p.webinar);
+    if (!w.label) continue;
+    if (p.email && !webinarByEmail.has(p.email)) webinarByEmail.set(p.email, w);
+    const pk = phoneKey(p.phone);
+    if (pk && !webinarByPhone.has(pk)) webinarByPhone.set(pk, w);
+    known.set(w.label, w);
+  }
+  const webinarDates = [...known.values()].filter((w) => w.date).sort((x, y) => (x.date < y.date ? -1 : 1));
+
   const out = [];
   for (const list of groups.values()) {
     list.sort((x, y) => (x.at < y.at ? -1 : 1));
@@ -169,6 +199,19 @@ function buildAppointments(rows, { leads, tickets, dimsFor }) {
       }
     }
     const d = dimsFor(utm, adId);
+    // Webinar: eigene Spalte, sonst das der Person aus Lead-/Fragebogen-Tab,
+    // sonst das letzte Webinar am oder vor dem Buchungstag
+    let webinar = webinarOf(list.find((r) => r.webinar)?.webinar);
+    if (!webinar.label) {
+      for (const r of list) {
+        const w = (r.email && webinarByEmail.get(r.email)) || (phoneKey(r.phone) && webinarByPhone.get(phoneKey(r.phone)));
+        if (w) { webinar = w; break; }
+      }
+    }
+    if (!webinar.label) {
+      const day = String(list[0].at || '').slice(0, 10);
+      webinar = webinarDates.filter((w) => w.date && w.date <= day).pop() || { label: '', date: '' };
+    }
     const a = {
       at: list[0].at,
       callAt: rep.callAt || null,
@@ -182,6 +225,7 @@ function buildAppointments(rows, { leads, tickets, dimsFor }) {
       adId: adId || '',
       utm: { ...utm },
       matchedBy,
+      webinar: webinar.label,
     };
     out.push(a);
   }
@@ -268,6 +312,7 @@ export function buildDataset({ leads, tickets, overview, appointments: appointme
       ticketUtm: null,
       ticketAdId: '',
       answers: hasQuality ? (t?.answers || null) : null,
+      webinar: webinarOf(l.webinar).label,
     });
   }
 
@@ -288,6 +333,7 @@ export function buildDataset({ leads, tickets, overview, appointments: appointme
       ticketUtm: { ...t.utm },
       ticketAdId: t.adId || '',
       answers: hasQuality ? (t.answers || null) : null,
+      webinar: webinarOf(t.webinar).label,
     });
   }
 
@@ -340,6 +386,7 @@ export function buildDataset({ leads, tickets, overview, appointments: appointme
       ...(paid ? {} : (() => { const o = organicLabels(r.utm); return { organicCampaign: o.campaign, organicAdset: o.adset }; })()),
       quality,
       answers: r.answers,
+      webinar: r.webinar || '',
     });
   }
 

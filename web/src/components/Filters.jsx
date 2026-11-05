@@ -16,7 +16,7 @@ function Select({ label, value, onChange, options, allLabel = 'Alle' }) {
   );
 }
 
-export default function Filters({ leads, filters, setFilters, tiers, onReset }) {
+export default function Filters({ leads, filters, setFilters, tiers, onReset, webinars = [], onWebinar }) {
   const { features, answers } = useProject();
   const { hasQuality } = features;
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -39,6 +39,15 @@ export default function Filters({ leads, filters, setFilters, tiers, onReset }) 
           <span>Suche (Name, E-Mail, Creative)</span>
           <input type="search" value={filters.search} placeholder="Leads durchsuchen…" onChange={(e) => set({ search: e.target.value })} />
         </label>
+        {webinars.length > 0 && (
+          <label className="filter">
+            <span>Webinar</span>
+            <select value={filters.webinar || ''} onChange={(e) => onWebinar(e.target.value)}>
+              <option value="">Alle</option>
+              {webinars.map((w) => <option key={w.label} value={w.label}>{w.label}</option>)}
+            </select>
+          </label>
+        )}
         <label className="filter">
           <span>Quelle</span>
           <select value={filters.sourceType} onChange={(e) => set({ sourceType: e.target.value })}>

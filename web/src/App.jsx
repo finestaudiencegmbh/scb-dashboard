@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchData } from './api.js';
-import { applyFilters, aggregate, computeKpis, tierDistribution, leadsByDay, leadsByTime, cplByDay, qualityTrend, qualifiedTiersOf, fmtDate, filterAppointments } from './lib.js';
+import { applyFilters, aggregate, computeKpis, tierDistribution, leadsByDay, leadsByTime, cplByDay, qualityTrend, qualifiedTiersOf, fmtDate, filterAppointments, webinarOptions } from './lib.js';
 import Kpis from './components/Kpis.jsx';
 import Filters from './components/Filters.jsx';
 import BreakdownTable from './components/BreakdownTable.jsx';
@@ -28,7 +28,7 @@ const NAV = [
 const EMPTY_FILTERS = {
   search: '', sourceType: 'all', campaign: '', adset: '', creative: '', placement: '',
   // answers = { <fragebogenSchlüssel>: <wert> }, aus der Projekt-Konfiguration
-  answers: {}, from: '', to: '', onlyTickets: false, tiers: [],
+  answers: {}, from: '', to: '', onlyTickets: false, tiers: [], webinar: '',
 };
 
 export default function App() {
@@ -72,6 +72,28 @@ export default function App() {
     // Zeitraum steuert Server (FB) UND die clientseitige Lead-Filterung
     setFilters((f) => ({ ...f, from: r.from, to: r.to }));
     load(false, r);
+  };
+
+  // Webinar-Filter: wählt die Sheet-Zeilen des Webinars und stellt den
+  // Zeitraum auf dessen Laufzeit (erster bis letzter Eintrag), damit Adspend
+  // und CPL zum selben Zeitraum passen.
+  const webinars = useMemo(() => (data ? webinarOptions(data.leads, data.appointments) : []), [data]);
+  // Zeitraum vor der Webinar-Auswahl, damit "Alle" ihn wiederherstellt
+  const rangeBeforeWebinar = useRef(null);
+  const selectWebinar = (label) => {
+    if (label && !filters.webinar) rangeBeforeWebinar.current = range;
+    setFilters((f) => ({ ...f, webinar: label }));
+    const w = webinars.find((x) => x.label === label);
+    const next = w ? { from: w.from, to: w.to } : (!label && rangeBeforeWebinar.current);
+    if (!label) rangeBeforeWebinar.current = null;
+    if (next && (next.from !== range.from || next.to !== range.to)) applyRange(next);
+  };
+
+  const resetFilters = () => {
+    const prev = rangeBeforeWebinar.current;
+    rangeBeforeWebinar.current = null;
+    setFilters({ ...EMPTY_FILTERS, from: range.from, to: range.to });
+    if (prev && (prev.from !== range.from || prev.to !== range.to)) applyRange(prev);
   };
 
   const tiers = data?.scoring?.tiers || [];
@@ -195,7 +217,7 @@ export default function App() {
 
         {data && (
           <>
-            <Filters leads={data.leads} filters={filters} setFilters={setFilters} tiers={tiers} onReset={() => setFilters({ ...EMPTY_FILTERS, from: range.from, to: range.to })} />
+            <Filters leads={data.leads} filters={filters} setFilters={setFilters} tiers={tiers} webinars={webinars} onWebinar={selectWebinar} onReset={resetFilters} />
 
             {view === 'dashboard' && (
               <>

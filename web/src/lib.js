@@ -64,6 +64,7 @@ export function applyFilters(leads, f) {
     if (f.creative && l.creative !== f.creative) return false;
     if (f.placement && l.placement !== f.placement) return false;
     if (f.onlyTickets && !l.hasTicket) return false;
+    if (f.webinar && l.webinar !== f.webinar) return false;
     // Fragebogen-Filter: { <antwortSchlüssel>: <wert> } – welche Schlüssel es
     // gibt, steht in der Projekt-Konfiguration, nicht hier.
     for (const [key, val] of Object.entries(f.answers || {})) {
@@ -517,6 +518,7 @@ export function filterAppointments(list, f) {
     if (f.campaign && a.campaign !== f.campaign) return false;
     if (f.adset && a.adset !== f.adset) return false;
     if (f.creative && a.creative !== f.creative) return false;
+    if (f.webinar && a.webinar !== f.webinar) return false;
     if (f.from || f.to) {
       const day = dayKey(a.at);
       if (!day) return false;
@@ -570,4 +572,29 @@ export function appointmentsByTime(list, hourlyDay = null) {
   let last = slots.length - 1;
   while (last > first && slots[last].total === 0) last -= 1;
   return { perSlot: slots, cumulative: cumulative.slice(Math.max(0, first - 30), Math.min(slots.length, last + 31)) };
+}
+
+/**
+ * Webinare aus der Sheet-Spalte "Webinar" für den Filter: [{ label, from, to }]
+ * mit dem Zeitraum vom ersten bis zum letzten Eintrag (Opt-in, Umfrage,
+ * Termin) dieses Webinars. Neuestes Webinar zuerst.
+ */
+export function webinarOptions(leads, appointments = []) {
+  const m = new Map();
+  const add = (label, iso) => {
+    const day = dayKey(iso);
+    if (!label || !day) return;
+    const e = m.get(label) || { label, from: day, to: day };
+    if (day < e.from) e.from = day;
+    if (day > e.to) e.to = day;
+    m.set(label, e);
+  };
+  for (const l of leads || []) add(l.webinar, l.isLead !== false ? l.wonAt : (l.ticketAt || l.wonAt));
+  for (const a of appointments || []) add(a.webinar, a.at);
+  // Sortierung nach dem Datum im Label (dd.mm.yy), sonst nach Zeitraum
+  const sortKey = (w) => {
+    const d = w.label.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+    return d ? `20${d[3]}-${d[2]}-${d[1]}` : w.to;
+  };
+  return [...m.values()].sort((x, y) => (sortKey(x) < sortKey(y) ? 1 : -1));
 }

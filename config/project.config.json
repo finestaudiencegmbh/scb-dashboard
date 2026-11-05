@@ -58,7 +58,8 @@
         "utmCampaign": ["utm_campaign"],
         "utmTerm": ["utm_term"],
         "utmContent": ["utm_content"],
-        "adId": ["ad_id", "h_ad_id", "cmc_adid"]
+        "adId": ["ad_id", "h_ad_id", "cmc_adid"],
+        "webinar": ["webinar"]
       },
       "tickets": {
         "date": ["eingetragen am"],
@@ -72,7 +73,8 @@
         "utmCampaign": ["utm_campaign"],
         "utmTerm": ["utm_term"],
         "utmContent": ["utm_content"],
-        "adId": ["ad_id", "h_ad_id", "cmc_adid"]
+        "adId": ["ad_id", "h_ad_id", "cmc_adid"],
+        "webinar": ["webinar"]
       },
       "appointments": {
         "date": ["datum"],
@@ -86,7 +88,8 @@
         "utmCampaign": ["utm_campaign"],
         "utmTerm": ["utm_term"],
         "utmContent": ["utm_content"],
-        "adId": ["ad_id"]
+        "adId": ["ad_id"],
+        "webinar": ["webinar"]
       },
       "overview": {
         "status": ["status"],

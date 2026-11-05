@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert/strict';
 import { parseSheets } from './parser.js';
-import { buildDataset, labelAppointmentSources } from './build.js';
+import { buildDataset, labelAppointmentSources, webinarOf } from './build.js';
 import { loadProjectConfig } from './project.js';
 import { loadScoringConfig } from './scoring.js';
 import { resolveAdIds } from './adid.js';
@@ -119,6 +119,30 @@ assert.equal(JSON.stringify(fb.hierarchy.map((c) => [c.spend, c.leads, c.tickets
 // Gleicher Name in beiden Konten, keine Ad-ID -> nicht zuordenbar statt geraten
 const ambiguous = [{ sourceType: 'paid', campaign: CAMP, adset: AS, creative: AD, adId: '' }];
 assert.equal(attachAppointments(fb.hierarchy, meta.byAccount, ambiguous).unassigned, 1);
+
+// --- Webinar-Spalte -------------------------------------------------------------
+assert.deepEqual(webinarOf('Webinar 01.11.2026 um 11 Uhr'), { label: 'Webinar 01.11.26', date: '2026-11-01' });
+assert.deepEqual(webinarOf('Webinar 1.12.26'), { label: 'Webinar 01.12.26', date: '2026-12-01' });
+assert.deepEqual(webinarOf(''), { label: '', date: '' });
+const W1 = 'Webinar 01.11.2026 um 11 Uhr';
+const W2 = 'Webinar 21.11.2026 um 11 Uhr';
+const wLeads = [
+  ['Eingetragen am', 'Vorname', 'E-Mail', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ad_id', 'LP', 'Webinar'],
+  ['2026-10-25 10:00:00 +0000', 'Alt', 'alt@example.com', 'email', 'invite', 'w', '', '', '', '', W1],
+  ['2026-11-03 10:00:00 +0000', 'Neu', 'neu@example.com', 'email', 'invite', 'w', '', '', '', '', W2],
+];
+const wTerm = [
+  termTab[0],
+  T('2026-11-01 13:00:00 +0000', 'Alt', 'alt@example.com', '+49 1'),          // über E-Mail -> W1
+  T('2026-11-22 09:00:00 +0000', 'Fremd', 'fremd@example.com', '+49 160 9999999'), // kein Treffer -> letztes Webinar davor (W2)
+  T('2026-11-02 09:00:00 +0000', 'Frueh', 'frueh@example.com', '+49 160 8888888'), // zwischen W1 und W2 -> W1
+];
+const wds = buildDataset(parseSheets([{ title: 'L', values: wLeads }, { title: 'T', values: wTerm }], P.sheet, on), cfg, on, P.sheet.utmRoles);
+assert.deepEqual(wds.leads.map((l) => l.webinar), ['Webinar 01.11.26', 'Webinar 21.11.26'], 'Leads tragen das Webinar-Label');
+const wOf = (email) => wds.appointments.find((a) => a.email === email).webinar;
+assert.equal(wOf('alt@example.com'), 'Webinar 01.11.26', 'Termin erbt das Webinar der Person');
+assert.equal(wOf('fremd@example.com'), 'Webinar 21.11.26', 'ohne Treffer: letztes Webinar am oder vor dem Buchungstag');
+assert.equal(wOf('frueh@example.com'), 'Webinar 01.11.26');
 
 console.log('✓ Alle Termin-Tests bestanden');
 console.log('  Termin-Tab ändert keine Lead-/Ticket-/Spend-Zahl; je Person gezählt; ohne UTM über Lead-E-Mail/Umfrage-Telefon; je Konto getrennt');

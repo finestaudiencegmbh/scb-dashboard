@@ -45,6 +45,7 @@ export const DEFAULT_SHEET_CONFIG = {
       utmTerm: ['utm_term'],
       utmContent: ['utm_content'],
       adId: ['ad_id', 'h_ad_id', 'cmc_adid'],
+      webinar: ['webinar'], // optional: für welches Webinar die Person sich eingetragen hat
     },
     tickets: {
       date: ['teilgenommen am'],
@@ -59,6 +60,7 @@ export const DEFAULT_SHEET_CONFIG = {
       utmTerm: ['utm_term'],
       utmContent: ['utm_content'],
       adId: ['ad_id', 'h_ad_id', 'cmc_adid'],
+      webinar: ['webinar'], // optional: für welches Webinar die Person sich eingetragen hat
     },
     // Termin-Tab (optional, features.hasAppointments): eine Zeile je Buchung
     appointments: {
@@ -74,6 +76,7 @@ export const DEFAULT_SHEET_CONFIG = {
       utmTerm: ['utm_term'],
       utmContent: ['utm_content'],
       adId: ['ad_id', 'h_ad_id', 'cmc_adid'],
+      webinar: ['webinar'], // optional: für welches Webinar die Person sich eingetragen hat
     },
     overview: {
       status: ['status'],
@@ -262,6 +265,7 @@ function parseLeadRow(o, cols) {
     utm: utmOf(o, cols),
     adId: adIdOf(o, cols),
     ticketAt: parseDate(pick(o, cols.ticketDate)),
+    webinar: norm(pick(o, cols.webinar)),
   };
 }
 
@@ -283,6 +287,7 @@ function parseTicketRow(o, cols, answerCfg) {
     answers,
     utm: utmOf(o, cols),
     adId: adIdOf(o, cols),
+    webinar: norm(pick(o, cols.webinar)),
   };
 }
 
@@ -298,6 +303,7 @@ function parseAppointmentRow(o, cols) {
     closer: norm(pick(o, cols.closer)),
     utm: utmOf(o, cols),
     adId: adIdOf(o, cols),
+    webinar: norm(pick(o, cols.webinar)),
   };
 }
 
