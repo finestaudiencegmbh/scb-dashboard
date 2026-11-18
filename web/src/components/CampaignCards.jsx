@@ -284,7 +284,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
                                         : ad.active === false && <span className="paused-tag">aus</span>}
                                       {hasGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }) && <GraphBtn compact onClick={() => openGraph('creative', { campaign: c.name, adset: a.name, creative: ad.name, account: c.account }, ad.name)} />}
                                     </span>
-                                    {adCols.map((c) => <span key={c.label}>{c.value(ad, leadHidden)}</span>)}
+                                    {adCols.map((c) => <span key={c.label} data-label={c.label}>{c.value(ad, leadHidden)}</span>)}
                                   </div>
                                 ))}
                               </div>

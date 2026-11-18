@@ -88,6 +88,12 @@ function MonthGrid({ view, from, to, onPick }) {
 
 export default function DateRangePicker({ from, to, onApply }) {
   const [open, setOpen] = useState(false);
+  // Mobil: Topbar (und damit das Bottom-Sheet) über die Tab-Leiste heben,
+  // solange der Picker offen ist – sonst verdeckt sie "Übernehmen"
+  useEffect(() => {
+    document.body.classList.toggle('dp-open', open);
+    return () => document.body.classList.remove('dp-open');
+  }, [open]);
   const [tmpFrom, setTmpFrom] = useState(from || '');
   const [tmpTo, setTmpTo] = useState(to || '');
   const [view, setView] = useState(() => (to ? startOfMonth(parse(to)) : startOfMonth(projectToday())));
