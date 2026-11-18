@@ -798,6 +798,8 @@ body {
   .dp-actions .ghost-btn, .dp-actions .refresh-btn { flex: 1; justify-content: center; padding: 13px; font-size: 15px; }
 
   /* ---- Filter ---- */
+  /* Mobil ausgeblendet (Wunsch): Zeitraum oben reicht unterwegs */
+  .filters { display: none; }
   .filters { padding: 14px; }
   .filters-primary { gap: 12px; }
   .filter { min-width: 100%; }
@@ -900,6 +902,12 @@ body {
   .cc-ad > span:not(.cc-ad-name) { display: flex; flex-direction: column; gap: 2px; text-align: left; min-width: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
   .cc-ad > span[data-label]::before { content: attr(data-label); font-size: 11px; font-weight: 500; color: var(--faint); }
   .cc-ad-headrow { display: none; }
+  /* Lange Namen von Anzeigengruppen/Anzeigen: seitlich wischen statt "…" */
+  .cc-subname, .cc-ad-label {
+    flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; text-overflow: clip;
+    -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; scrollbar-width: none;
+  }
+  .cc-subname::-webkit-scrollbar, .cc-ad-label::-webkit-scrollbar { display: none; }
   .cc-sort select { font-size: 15px; padding: 10px 12px; }
 
   /* ---- Quellen ---- */
