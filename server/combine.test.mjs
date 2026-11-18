@@ -76,5 +76,31 @@ assert.equal(d27.tickets, 1);
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+// --- Neue Anzeigengruppe, die im (zwischengespeicherten) Status noch fehlt ---
+{
+  const today = new Date().toISOString().slice(0, 10);
+  const C = 'JP ACC2 | SCB Live-Workshop Leads | ABO | 161126';
+  const ent = (adset, adId, creative) => ({ campaignId: 'c1', campaign: C, adsetId: adset, adset, adId, creative, spend: 13.62, impressions: 900, clicks: 9, uniqueOutboundClicks: 5 });
+  const out = combineMetaWithLeads({
+    entities: [ent('AG1 V8', '1', 'IMG_2636'), ent('AG5 KI Quiz', '5', 'Quiz 1'), ent('AG3 alt', '3', 'Alt 1')],
+    // Tagesdaten: AG1 und die neue AG5 liefern heute aus, AG3 seit Wochen nicht mehr
+    dailyEntities: [
+      { campaign: C, adset: 'AG1 V8', creative: 'IMG_2636', date: today, spend: 20 },
+      { campaign: C, adset: 'AG5 KI Quiz', creative: 'Quiz 1', date: today, spend: 13.62 },
+      { campaign: C, adset: 'AG3 alt', creative: 'Alt 1', date: '2026-10-01', spend: 5 },
+    ],
+    campaignStatus: { [C]: { status: 'ACTIVE', active: true, objective: 'OUTCOME_LEADS' } },
+    // Status-Stand von vor der Anlage von AG5; AG3 ist archiviert und fehlt ebenfalls
+    adsetStatus: { 'AG1 V8': { status: 'ACTIVE', active: true } },
+    adList: [{ id: '1', name: 'IMG_2636', adset: 'AG1 V8', campaign: C, active: true, status: 'ACTIVE' }],
+  }, []);
+  const adsets = Object.fromEntries(out.hierarchy[0].adsets.map((a) => [a.name, a]));
+  assert.equal(adsets['AG1 V8'].active, true, 'gelistete Gruppe: Status von Meta');
+  assert.equal(adsets['AG5 KI Quiz'].active, null, 'neue, ausliefernde Gruppe ohne Status: unbekannt statt inaktiv');
+  assert.equal(adsets['AG3 alt'].active, false, 'fehlende Gruppe ohne aktuelle Auslieferung: archiviert = inaktiv');
+  assert.equal(adsets['AG5 KI Quiz'].ads[0].active, null, 'gilt auch für die Anzeige darin');
+  assert.equal(adsets['AG3 alt'].ads[0].active, false);
+}
+
 console.log('✓ Alle Combine-Tests bestanden');
 console.log(`  Kampagne: ${c.name} | Spend ${c.spend}€ | Leads ${c.leads} | LP-Conv ${(c.lpConversion * 100).toFixed(1)}%`);

@@ -116,12 +116,25 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
     }
   }
   const haveAdList = adStatusByPath.size > 0;
+  // Gestern oder heute ausgeliefert (Spend > 0)? Ein Eintrag, der so liefert,
+  // aber im Status fehlt, ist nicht archiviert, sondern NEU: angelegt nach dem
+  // zwischengespeicherten Status-Abruf (bis 30 Min) oder während eines Abruf-
+  // Limits. Er bekommt "unbekannt" (null) statt "inaktiv", sonst blendet
+  // "Nur aktive" ihn aus, obwohl er läuft.
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const recent = { campaign: new Set(), adset: new Set(), creative: new Set() };
+  for (const r of dailyEntities) {
+    if (!r.date || r.date < yesterday || !(r.spend > 0)) continue;
+    for (const dim of ['campaign', 'adset', 'creative']) recent[dim].add(pathKey(dim, r));
+  }
+  const missing = (dim, parts) => (recent[dim].has(pathKey(dim, parts)) ? null : false);
   // Ad aktiv? Auflösung über den vollen Pfad; fehlt der Eintrag bei geladener
-  // Ad-Liste -> archiviert (inaktiv); ohne Ad-Liste -> unbekannt (null).
+  // Ad-Liste -> archiviert (inaktiv), außer er liefert gerade aus (siehe oben);
+  // ohne Ad-Liste -> unbekannt (null).
   const resolveAdActive = (campaign, adset, creative) => {
     const s = adStatusByPath.get(pathKey('creative', { campaign, adset, creative }));
     if (s) return s.active;
-    return haveAdList ? false : null;
+    return haveAdList ? missing('creative', { campaign, adset, creative }) : null;
   };
 
   // Meta listet ARCHIVIERTE Kampagnen/Anzeigengruppen/Ads standardmäßig NICHT im
@@ -133,10 +146,11 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
   const haveCampaignStatus = Object.keys(campaignStatus).length > 0;
   const haveAdsetStatus = Object.keys(adsetStatus).length > 0;
   const haveAdStatus = Object.keys(adStatus).length > 0;
-  const resolveActive = (map, have, name) => {
+  const resolveActive = (map, have, name, dim = null, parts = null) => {
     const s = map[name];
     if (s) return s.active;
-    return have ? false : null;
+    if (!have) return null;
+    return dim ? missing(dim, parts) : false;
   };
   const campCfg = loadCampaignConfig();
 
@@ -214,7 +228,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         name: e.campaign,
         account: e.account ?? null,
         level: 'campaign',
-        active: resolveActive(campaignStatus, haveCampaignStatus, e.campaign),
+        active: resolveActive(campaignStatus, haveCampaignStatus, e.campaign, 'campaign', e),
         status: campaignStatus[e.campaign]?.status ?? (haveCampaignStatus ? 'ARCHIVED' : null),
         objective,
         leadCampaign: isLeadCampaign(e.campaign, objective, campCfg),
@@ -230,7 +244,7 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
         id: e.adsetId,
         name: e.adset,
         level: 'adset',
-        active: resolveActive(adsetStatus, haveAdsetStatus, e.adset),
+        active: resolveActive(adsetStatus, haveAdsetStatus, e.adset, 'adset', e),
         status: adsetStatus[e.adset]?.status ?? (haveAdsetStatus ? 'ARCHIVED' : null),
         _m: emptyMetrics(),
         _acc: new Map(),
@@ -388,8 +402,8 @@ export function combineMetaWithLeads(meta, leads, opts = {}) {
     return dimMeta[dim][k];
   };
   for (const e of entities) {
-    const cActive = resolveActive(campaignStatus, haveCampaignStatus, e.campaign);
-    const aActive = resolveActive(adsetStatus, haveAdsetStatus, e.adset);
+    const cActive = resolveActive(campaignStatus, haveCampaignStatus, e.campaign, 'campaign', e);
+    const aActive = resolveActive(adsetStatus, haveAdsetStatus, e.adset, 'adset', e);
     const adRaw = resolveAdActive(e.campaign, e.adset, e.creative);
     const adActive = adRaw == null ? aActive : adRaw; // echter Ad-Status, sonst von Anzeigengruppe
     const buckets = [
