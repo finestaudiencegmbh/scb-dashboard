@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fmtEur, fmtInt, fmtPct, fmtQuality, entityKey, minuteSeriesFromEvents } from '../lib.js';
+import { fmtEur, fmtInt, fmtPct, fmtQuality, entityKey, minuteSeriesFromEvents, projectToday } from '../lib.js';
 import { useProject } from '../project.jsx';
 import GraphPanel from './GraphPanel.jsx';
 
@@ -176,7 +176,7 @@ export default function CampaignCards({ hierarchy, dailyByEntity, intradayByEnti
   // heute Spend hatte. Gibt es für gestern/heute gar keine Tagesdaten (Zeitraum
   // in der Vergangenheit, Grafikdaten fehlen), wird nichts ausgeblendet.
   const pad2 = (n) => String(n).padStart(2, '0');
-  const now = new Date();
+  const now = projectToday();
   const yd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
   const yesterday = `${yd.getFullYear()}-${pad2(yd.getMonth() + 1)}-${pad2(yd.getDate())}`;
   const hasRecentData = Object.values(dailyByEntity?.campaign || {}).some((pts) => pts.some((p) => p.date >= yesterday));

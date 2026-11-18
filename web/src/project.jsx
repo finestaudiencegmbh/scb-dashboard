@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import { setProjectTimezone } from './lib.js';
 
 /**
  * Projekt-Konfiguration im Frontend: Branding, Feature-Flags, Begriffe und die
@@ -105,6 +106,8 @@ export function applyBackground(background) {
 export function ProjectProvider({ project, children }) {
   const value = useMemo(() => {
     const p = project || {};
+    // vor dem ersten Render der Kinder, damit der Start-Zeitraum schon stimmt
+    setProjectTimezone(p.timezone);
     return {
       ...DEFAULT_PROJECT,
       ...p,

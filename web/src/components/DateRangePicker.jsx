@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { projectToday } from '../lib.js';
 
-// ---- Datums-Helfer (lokale Zeit, ohne Bibliothek) --------------------------
+// ---- Datums-Helfer (ohne Bibliothek; "heute" = Projekt-Zeitzone) ---------
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parse = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
@@ -13,7 +14,7 @@ const fmtDE = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return
 
 /** Liefert {from,to} für ein Preset relativ zu heute. */
 function presetRange(key) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = projectToday();
   const y = addDays(today, -1);
   switch (key) {
     case 'today': return [today, today];
@@ -62,7 +63,7 @@ function MonthGrid({ view, from, to, onPick }) {
   for (let i = 0; i < lead; i++) cells.push(null);
   for (let d = 1; d <= days; d++) cells.push(new Date(view.getFullYear(), view.getMonth(), d));
 
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = projectToday();
   const inRange = (d) => from && to && ymd(d) >= from && ymd(d) <= to;
   const isEnd = (d) => (from && ymd(d) === from) || (to && ymd(d) === to);
   const isFuture = (d) => d > today;
@@ -89,7 +90,7 @@ export default function DateRangePicker({ from, to, onApply }) {
   const [open, setOpen] = useState(false);
   const [tmpFrom, setTmpFrom] = useState(from || '');
   const [tmpTo, setTmpTo] = useState(to || '');
-  const [view, setView] = useState(() => (to ? startOfMonth(parse(to)) : startOfMonth(new Date())));
+  const [view, setView] = useState(() => (to ? startOfMonth(parse(to)) : startOfMonth(projectToday())));
   const ref = useRef(null);
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function DateRangePicker({ from, to, onApply }) {
   const label = from && to ? `${fmtDE(from)} – ${fmtDE(to)}` : 'Maximum (gesamter Zeitraum)';
   const prevView = startOfMonth(addDays(startOfMonth(view), -1));
   // Nicht in die Zukunft blättern: 'view' (rechter Monat) zeigt nie über den aktuellen Monat hinaus
-  const thisMonth = startOfMonth(new Date());
+  const thisMonth = startOfMonth(projectToday());
   const atCurrentMonth = view.getFullYear() === thisMonth.getFullYear() && view.getMonth() === thisMonth.getMonth();
 
   return (

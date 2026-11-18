@@ -18,6 +18,7 @@ export const DEFAULT_PROJECT = {
   shortName: 'Dashboard',
   subtitle: 'Lead-Dashboard',
   slug: 'dashboard',
+  timezone: 'Europe/Berlin', // "heute" im Dashboard (Werbekonto/Sheet-Zeit), nicht die Browser-Uhr
   branding: { accent: '#7aa2f7', logo: '/logo.svg' }, // neutraler Fallback, falls die Config kein Branding setzt
   features: { hasTickets: true, hasQuality: true, hasAppointments: false },
   labels: { ticket: { one: 'Ticket', many: 'Tickets', short: 'Ticket' }, appointment: { one: 'Termin', many: 'Termine' } },
@@ -103,6 +104,7 @@ export function publicProjectConfig(cfg = loadProjectConfig()) {
     subtitle: cfg.subtitle,
     event: cfg.event || '',
     slug: cfg.slug,
+    timezone: cfg.timezone,
     branding: cfg.branding,
     features: cfg.features,
     labels: cfg.labels,

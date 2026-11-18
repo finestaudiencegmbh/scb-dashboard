@@ -22,6 +22,25 @@ export const fmtDate = (iso) => {
 // Tagesschlüssel = UTC-Datum aus dem Zeitstempel. Das entspricht exakt dem im
 // Sheet angezeigten Datum (+0000), sodass die Tageszahlen mit dem Sheet
 // übereinstimmen.
+// ---- Projekt-Zeitzone -------------------------------------------------------
+// "Heute" richtet sich nach der Zeitzone des Projekts (Werbekonto und Sheet
+// laufen auf deutscher Zeit), nicht nach der Uhr des Browsers. Sonst endet
+// "Dieser Monat" z. B. im Ausland einen Tag zu früh und Metas Spend von heute
+// fällt heraus. Gesetzt aus project.config.json (timezone) im ProjectProvider.
+let projectTz = 'Europe/Berlin';
+export const setProjectTimezone = (tz) => { if (tz) projectTz = tz; };
+
+/** Heute in der Projekt-Zeitzone als lokales Datum um 0:00 (für Datums-Rechnung). */
+export function projectToday() {
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: projectTz, year: 'numeric', month: 'numeric', day: 'numeric' })
+      .formatToParts(new Date()).map((p) => [p.type, p.value]));
+    return new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+  } catch {
+    const d = new Date(); d.setHours(0, 0, 0, 0); return d; // unbekannte Zeitzone: Browser-Zeit
+  }
+}
+
 export const dayKey = (iso) => (iso ? String(iso).slice(0, 10) : '');
 
 // ---- Filterung -------------------------------------------------------------
